@@ -34,7 +34,7 @@ object Parser {
     P(("" ~ mathExpr).rep.map(_.toList)).map(MathBlock.apply).m
 
   def markupExpr[$: P]: P[Node] = P(
-    hashExpr | equation | blockRaw | inlineRaw | regularMarkupContent,
+    hashExpr | equation | blockRaw | inlineRaw | regularMarkup,
   )
   def lazyCodeExpr[$: P]: P[Node] = P(
     lazyCodeBlock | lazyContentBlock | codeExpr,
@@ -44,7 +44,7 @@ object Parser {
     letBindingItem | ifItem | forItem | whileItem | breakItem | continueItem | returnItem | showItem | setItem | importItem | includeItem,
   )
   def mathExpr[$: P]: P[Node] = P(
-    hashExpr,
+    hashExpr | escapeseq.!.map(EscapeLit.apply) | regularMarkup,
   )
 
   def codeBlock[$: P]: P[Node] = P(
@@ -66,12 +66,14 @@ object Parser {
 
   // Markup
 
-  def regularMarkupContent[$: P]: P[Node] =
-    P(
-      (!(End | "#" | "$" | "`" | "]") ~~/ (fastSkipMarkup | escapeseq)).log.repX.!,
-    )
-      .map(MarkupContent.apply)
-  def fastSkipMarkup[$: P] = CharsWhile(!"#]$`\\".contains(_))
+  def regularMarkup[$: P]: P[Node] =
+    P(regularMarkupContent.repX.!).map(MarkupContent.apply)
+  def regularMarkupContent[$: P]: P[Unit] = P(
+    ("[" ~~ regularMarkupContent ~~ ("]" | End)) |
+      !(End | "#" | "$" | "`" | "]") ~~/ (fastSkipMarkup | escapeseq),
+  )
+
+  def fastSkipMarkup[$: P] = CharsWhile(!"#[]$`\\".contains(_))
   def blockRaw[$: P]: P[Node] = P(
     "`"
       .rep(min = 3)
