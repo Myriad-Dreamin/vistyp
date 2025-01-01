@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="icon" href="favicon.svg" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vistyp Editor</title>
+    <link rel="stylesheet" href="typst-style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/dev/vs/loader.min.js"></script>
+    <script>
+      window.$typst$moduleSource = "local";
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/main.js"></script>
+    <script>
+      window.onload = function () {
+        // require is provided by loader.min.js.
+        require.config({
+          paths: {
+            vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs",
+          },
+        });
+        require(["vs/editor/editor.main"], async () => {
+          monaco.editor.defineTheme("tokyo-night", window.tokyoNightTheme());
+          // Register a new language
+          monaco.languages.register({ id: "typst", extensions: [".typ"] });
+          monaco.languages.registerDocumentSemanticTokensProvider(
+            "typst",
+            await $typst$semanticTokensProvider
+          );
+
+          console.log("monaco done");
+          onLoadedMonaco(monaco);
+        });
+      };
+    </script>
+  </body>
+</html>

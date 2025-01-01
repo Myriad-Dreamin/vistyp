@@ -1,0 +1,41 @@
+{
+  "name": "@myriaddreamin/vistyp",
+  "private": true,
+  "version": "0.5.4",
+  "description": "Simple visualized editor",
+  "author": "Myriad Dreamin <camiyoru@gmail.com>",
+  "license": "Apache-2.0",
+  "keywords": [
+    "typst",
+    "renderer"
+  ],
+  "repository": "https://github.com/Myriad-Dreamin/vistyp",
+  "main": "dist/index.mjs",
+  "files": [
+    "dist/index.mjs"
+  ],
+  "dependencies": {
+    "@myriaddreamin/typst.ts": "0.5.4",
+    "@myriaddreamin/typst-ts-renderer": "0.5.4",
+    "@myriaddreamin/typst-ts-web-compiler": "0.5.4"
+  },
+  "devDependencies": {
+    "@scala-js/vite-plugin-scalajs": "^1.0.0",
+    "vite": "^6.0.6",
+    "vite-plugin-singlefile": "^2.1.0",
+    "vitest": "^2.1.8",
+    "@types/web": "^0.0.188"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "publish:dry": "npm publish --dry-run",
+    "publish:lib": "npm publish || exit 0"
+  },
+  "engines": {
+    "node": ">=12"
+  }
+}
