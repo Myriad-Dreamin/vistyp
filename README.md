@@ -8,7 +8,7 @@ Run the vite dev server to get hot-reloading functionality:
 
 ```bash
 # watch scala
-$ sbt ~fastLinkJS
+$ sbt "~fastLinkJS"
 # start a vite dev server
 $ yarn run dev
 # open the browser
