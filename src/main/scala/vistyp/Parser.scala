@@ -25,78 +25,82 @@ def parseCode(src: String): syntax.MarkupBlock = {
 object Parser {
   // Entry point
   def markupRoot[$: P]: P[MarkupBlock] =
-    P(("" ~ markupExpr).rep.map(_.toList) ~ End).map(MarkupBlock.apply).m
+    P((!End ~ markupExpr).rep.map(_.toList) ~ End).map(MarkupBlock.apply).m
   def markupMode[$: P]: P[MarkupBlock] =
-    P(("" ~ markupExpr).rep.map(_.toList)).map(MarkupBlock.apply).m
+    P((!End ~ markupExpr).rep.map(_.toList)).map(MarkupBlock.apply).m
   def codeMode[$: P]: P[Block] =
     P(("" ~ codeExpr).rep.map(_.toList)).map(Block.apply).m
+  def mathMode[$: P]: P[MathBlock] =
+    P(("" ~ mathExpr).rep.map(_.toList)).map(MathBlock.apply).m
 
   def markupExpr[$: P]: P[Node] = P(
-    hashExpr,
+    hashExpr | equation | blockRaw | inlineRaw | regularMarkupContent,
   )
-
-  def hashExpr[$: P]: P[Node] = P("#" ~ hashExprBody)
-
-  def hashExprBody[$: P]: P[Node] = P(
-    codeBlock | contentBlock | letBinding,
+  def lazyCodeExpr[$: P]: P[Node] = P(
+    lazyCodeBlock | lazyContentBlock | codeExpr,
+  )
+  def codeExpr[$: P]: P[Node] = P(atomicExprNoPrimary | assign)
+  def atomicExprNoPrimary[$: P]: P[Node] = P(
+    letBindingItem | ifItem | forItem | whileItem | breakItem | continueItem | returnItem | showItem | setItem | importItem | includeItem,
+  )
+  def mathExpr[$: P]: P[Node] = P(
+    hashExpr,
   )
 
   def codeBlock[$: P]: P[Node] = P(
     "{" ~/ codeMode ~ "}",
   )
-
   def contentBlock[$: P]: P[Node] = P(
     "[" ~/ markupMode ~ "]",
   )
-
-  def codeExprCommon[$: P]: P[Node] = P(
-    letBinding | funcCall | ifStmt | parens | assign,
-  )
-  def lazyCodeExpr[$: P]: P[Node] = P(
-    lazyCodeBlock | lazyContentBlock | codeExprCommon,
+  def equation[$: P]: P[Node] = P(
+    "$" ~/ mathMode ~ "$",
   )
 
-  def codeExpr[$: P]: P[Node] = P(
-    codeBlock | contentBlock | codeExprCommon,
+  def hashExpr[$: P]: P[Node] = P(
+    "#" ~ (atomicExprNoPrimary | primaryExpr),
   )
 
   def lazyCodeBlock[$: P]: P[Node] = codeBlock
   def lazyContentBlock[$: P]: P[Node] = contentBlock
 
-  def letBinding[$: P]: P[Node] = P(
-    "let" ~/ ident ~/ paramList.? ~ "=" ~/ lazyCodeExpr,
-  ).map(LetBinding.apply.tupled)
+  // Markup
 
-  def paramList[$: P]: P[List[Node]] = P(
-    "(" ~/ (ident ~ defaultValue.?).map(Param.apply.tupled).rep(sep = ",") ~ ")",
-  ).map(_.toList)
-  def defaultValue[$: P] = P(":" ~/ codeExpr).m
-
-  def funcCall[$: P]: P[Node] = P(ident ~ argList).map(Apply.apply.tupled)
-  def argList[$: P]: P[List[Node]] = P(
-    "(" ~/ (namedArg | spreadArg | codeExpr).rep(sep = ",") ~ ")",
-  ).map(_.toList)
-
-  def namedArg[$: P]: P[Node] = P(
-    ident ~ ":" ~/ codeExpr,
-  ).map(KeyedArg.apply.tupled)
-
-  def spreadArg[$: P]: P[Node] = P(".." ~/ codeExpr).map(UnOp("..", _))
-
-  def anyBlock[$: P]: P[Node] = P(
-    codeBlock | contentBlock,
+  def regularMarkupContent[$: P]: P[Node] =
+    P(
+      (!(End | "#" | "$" | "`" | "]") ~~/ (fastSkipMarkup | escapeseq)).log.repX.!,
+    )
+      .map(MarkupContent.apply)
+  def fastSkipMarkup[$: P] = CharsWhile(!"#]$`\\".contains(_))
+  def blockRaw[$: P]: P[Node] = P(
+    "`"
+      .rep(min = 3)
+      .!
+      .flatMapX(delim => rawBody(delim).! ~~ (delim | End))
+      .map(RawContent.apply),
+  )
+  def inlineRaw[$: P]: P[Node] =
+    P("``".map(_ => "") | "`" ~/ rawBody("`").! ~ "`").map(RawContent.apply)
+  def rawBody[$: P](delim: String) = P(
+    (!(delim | End) ~/ CharsWhile(!"`".contains(_))).rep.!,
   )
 
-  def ifStmt[$: P]: P[Node] = P(
-    "if" ~/ codeExpr ~ anyBlock ~ ("else" ~ (anyBlock | ifStmt)).?,
-  ).map(If.apply.tupled)
-
   // Literals
+  def whitespaceInline[$: P] = P(CharsWhileIn(" \t").rep)
+  def whitespace[$: P] = P(CharsWhileIn(" \t\n").rep)
   def noneLit[$: P] = P("none").map(_ => NoneLit)
   def autoLit[$: P] = P("auto").map(_ => AutoLit)
   def booleanLit[$: P] =
     (P(word("true") | word("false"))).!.map(v => BoolLit(v == "true"))
-  def numberLit[$: P] = P(float.map(FloatLit.apply) | int.map(IntLit.apply))
+  def numberLit[$: P]: P[FloatLit | IntLit] = P(
+    float.map(FloatLit.apply) | int.map(IntLit.apply),
+  )
+  def numberOrLengthLit[$: P] = P(
+    P(numberLit ~~ ident.?).map {
+      case (value, None)       => value
+      case (value, Some(unit)) => LengthLit(value, unit.name)
+    },
+  )
   def stringLit[$: P] = P(longStr | shortStr).map(StrLit.apply)
 
   // Lexer
@@ -159,57 +163,75 @@ object Parser {
   )
   def semi[$: P] = P(";").map(_ => Semi(None))
   def primaryExpr[$: P] =
-    P(ident | parens | literal | braces).m
+    P(ident | parens | literal | codeBlock | contentBlock).m
   def factor[$: P]: P[Node] = P(unary | primaryExpr.flatMapX(factorR))
 
   // Braces/Args/Params
-  def braces[$: P]: P[Node] =
-    P("{" ~/ term.rep.map(_.toList) ~ "}").map(body => {
-      // check if all terms are cases
-      var caseItems = List.empty[Case]
-      var anyNotCase = false
-      body.foreach {
-        case c: Case    => caseItems = caseItems :+ c
-        case Semi(None) =>
-        case _          => anyNotCase = true
-      }
-      if anyNotCase || body.isEmpty then Block(body)
-      else CaseBlock(caseItems)
-    })
   def parens[$: P] = argList.map(ArgsLit.apply)
-  def arg[$: P] = P(spread | keyedArg).m
-  def spread[$: P]: P[Node] = P(".." ~/ arg).map(UnOp("..", _))
-  def keyedArg[$: P] = P((compound ~ (":" ~/ compound).?).map {
-    case (lhs, Some(rhs)) => KeyedArg(lhs, rhs)
-    case (lhs, None)      => lhs
-  })
+  def paramList[$: P]: P[List[Node]] = P(
+    "(" ~/ (ident ~ defaultValue.?).map(Param.apply.tupled).rep(sep = ",") ~ ")",
+  ).map(_.toList)
+  def defaultValue[$: P] = P(":" ~/ codeExpr).m
+  def argList[$: P]: P[List[Node]] = P(
+    "(" ~/ (namedArg | spreadArg | codeExpr).rep(sep = ",") ~ ")",
+  ).map(_.toList)
+  def namedArg[$: P]: P[Node] = P(
+    ident ~ ":" ~/ codeExpr,
+  ).map(KeyedArg.apply.tupled)
+
+  def spreadArg[$: P]: P[Node] = P(".." ~/ codeExpr).map(UnOp("..", _))
   def chk[$: P](s: => P[Unit]) = P(s.?.!).map(_.nonEmpty)
 
   // Expressions
   def literal[$: P] = P(
-    numberLit | booleanLit | noneLit | autoLit | stringLit,
+    numberOrLengthLit | booleanLit | noneLit | autoLit | stringLit,
   ).m
   def ident[$: P] = id.map(Ident.apply).m
-  def loopItem[$: P] = P(word("loop") ~/ braces).map(Loop.apply)
-  def importItem[$: P] =
-    P(word("import") ~/ termU ~ (word("from") ~/ termU).?)
-      .map {
-        case (path, None)       => Import(path, None)
-        case (dest, Some(path)) => Import(path, Some(dest))
-      }
+  def anyBlock[$: P]: P[Node] = P(
+    codeBlock | contentBlock,
+  )
+  def ifItem[$: P]: P[Node] = P(
+    "if" ~/ codeExpr ~ anyBlock ~ ("else" ~ (anyBlock | ifItem)).?,
+  ).map(If.apply.tupled)
   def forItem[$: P] = P(
-    word("for") ~ "(" ~/ ident ~ word("in") ~ term ~ ")" ~ braces,
+    word("for") ~ "(" ~/ ident ~ word("in") ~ term ~ ")" ~ anyBlock,
   ).map(For.apply.tupled)
   def whileItem[$: P] = P(
-    word("while") ~/ parens ~ braces,
+    word("while") ~/ parens ~ anyBlock,
   ).map(While.apply)
   def breakItem[$: P] = P(word("break")).map(_ => Break())
   def continueItem[$: P] = P(word("continue")).map(_ => Continue())
-  def ifItem[$: P]: P[Node] = P(
-    word("if") ~/ parens ~ braces
-      ~ (word("else") ~ P(ifItem | braces)).?,
-  ).map(If.apply.tupled)
   def returnItem[$: P] = P(word("return") ~/ termU).map(Return.apply)
+  def applyItem[$: P]: P[Node] = P(ident ~ argList).map(Apply.apply.tupled)
+  def letBindingItem[$: P]: P[Node] = P(
+    "let" ~/ ident ~/ paramList.? ~ "=" ~/ lazyCodeExpr,
+  ).map(LetBinding.apply.tupled)
+  def importItem[$: P] =
+    P(
+      word("import") ~/ codeExpr ~ (word(
+        "as",
+      ) ~/ ident).? ~ (":" ~/ (importList(false) | "(" ~/ importList(
+        true,
+      ) ~ ")")).?,
+    )
+      .map(Import.apply.tupled)
+  def includeItem[$: P] = P(word("include") ~/ codeExpr).map(IncludeItem.apply)
+  def importList[$: P](allowNewLine: Boolean): P[List[Node]] = P(
+    if allowNewLine then {
+      importPath.rep(sep = ",").map(_.toList)
+    } else {
+      importPath.repX(sep = P("" ~~ whitespaceInline ~~ ",")).map(_.toList)
+    },
+  )
+  def showItem[$: P] =
+    P(
+      word("show") ~/ codeExpr.? ~ (":" ~/ codeExpr.?).?.map(_.flatten),
+    ).map(Show.apply.tupled)
+  def setItem[$: P] = P(
+    word("set") ~/ codeExpr ~ ("if" ~ codeExpr).?,
+  ).map(SetItem.apply.tupled)
+
+  def importPath[$: P]: P[Node] = ident
   // (Top) Compound expressions
   def compound[$: P] = andOr
   def moreAssigns[$: P] =
@@ -225,22 +247,21 @@ object Parser {
   def compare[$: P]: P[Node] = binOp(P(relOp | inNotIn), addSub)
   def addSub[$: P]: P[Node] = binOp(CharIn("+\\-") ~~ !"=", divMul)
   def divMul[$: P]: P[Node] = binOp(CharIn("*/") ~~ !"=", factor)
-  def unaryOps[$: P] = "!" | "~" | "-" | "+" | "&" | "*" | word("mut")
+  def unaryOps[$: P] = "!" | "~" | "-" | "+" | "&" | "*" | word("context")
   def unary[$: P]: P[Node] = P(unaryOps.! ~ factor).map(UnOp.apply.tupled)
   def eBinR[$: P](e: Node) = select(e) | lambda(e)
   def factorR[$: P](e: Node): P[Node] =
     P(("" ~ eBinR(e)).flatMapX(factorR) | P("").map(_ => e))
   def select[$: P](lhs: Node) =
-    P(("." | "::").! ~ ident).map((op, rhs) => Select(lhs, rhs, op != "."))
+    P((".") ~ ident).map((rhs) => Select(lhs, rhs))
   def lambda[$: P](lhs: Node) = P("=>" ~/ compound).map(rhs => Lambda(lhs, rhs))
-  def initExpression[$: P] = P("=" ~/ term).m
 
   // Weak Keywords: from
   // Strong Keywords
   val keywords =
     Set(
       // to reduce js load time a bit
-      "import|include|let|show|none|auto|set|break|continue|return|case|type|if|else|for|while|and|or|in|not|true|false"
+      "import|include|let|show|none|auto|set|break|continue|return|case|type|if|else|for|while|and|or|in|not|true|false|context"
         .split('|')*,
     )
 }
