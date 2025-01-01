@@ -49,6 +49,7 @@ final case class LengthLit(value: IntLit | FloatLit, unit: Str) extends Node
 final case class MarkupContent(value: Str) extends Node
 final case class RawContent(value: Str) extends Node
 final case class StrLit(value: Str) extends Node
+final case class LabelLit(value: Str) extends Node
 // todo: Param Literal, remove me
 final case class ParamsLit(values: List[Param]) extends Node
 // Argument Literal (Named and Nameless Tuples)

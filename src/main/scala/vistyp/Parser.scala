@@ -102,6 +102,8 @@ object Parser {
     },
   )
   def stringLit[$: P] = P(longStr | shortStr).map(StrLit.apply)
+  def labelLit[$: P] =
+    P("<" ~~/ (idCont | ":" | ".").repX.! ~~ ">").map(LabelLit.apply)
 
   // Lexer
   def word[$: P](s: String) = s ~~ !idCont
@@ -184,7 +186,7 @@ object Parser {
 
   // Expressions
   def literal[$: P] = P(
-    numberOrLengthLit | booleanLit | noneLit | autoLit | stringLit,
+    numberOrLengthLit | booleanLit | noneLit | autoLit | stringLit | labelLit,
   ).m
   def ident[$: P] = id.map(Ident.apply).m
   def anyBlock[$: P]: P[Node] = P(
