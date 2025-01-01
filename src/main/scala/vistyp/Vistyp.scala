@@ -2,31 +2,27 @@ package vistyp
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
+import scala.annotation.newMain
 
 import org.scalajs.dom
 import com.raquo.laminar.api.L.{*, given}
+
 import vistyp.syntax.*
-import scala.annotation.newMain
+import binding.Typst
 
 @main
 def bootstrapVistyp(): Unit =
   renderOnDomContentLoaded(
     dom.document.getElementById("app"), {
       Typst.configureWasm()
-      dom.console.log("TypstTs", TypstTs)
-      dom.window.asInstanceOf[js.Dynamic].$typst = TypstTs
       dom.window.asInstanceOf[js.Dynamic].tokyoNightTheme =
         () => tokyoNightTheme()
       dom.window.asInstanceOf[js.Dynamic].onLoadedMonaco =
         (monaco: Monaco) => monacoLoadVar.update(_ => Some(monaco))
 
-      dom.window.asInstanceOf[js.Dynamic].$typst$semanticTokensProvider =
-        TypstTs
-          .getSemanticTokenLegend()
-          .`then`(legend => {
-            dom.console.log("legend", legend)
-            new SemanticTokensProvider(legend)
-          })
+      dom.window.asInstanceOf[js.Dynamic].$typst$semanticTokensProvider = Typst
+        .getSemanticTokenLegend()
+        .`then`(new SemanticTokensProvider(_))
 
       UI(VistypImpl).mainElement()
     },

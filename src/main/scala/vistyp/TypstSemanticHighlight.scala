@@ -5,6 +5,8 @@ import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation._
 import org.scalajs.dom
 
+import binding.Typst
+
 val scopeRenamingRules = js.Dynamic.literal(
   scopes = js.Dynamic.literal(
     // vscode rules
@@ -208,10 +210,10 @@ class SemanticTokensProvider(legend: js.Object) {
   ): js.Promise[js.Object] = {
     val content = model.getValue().asInstanceOf[String]
     // todo: support incremental update
-    TypstTs
+    Typst
       .addSource("/semantic-tokens.typ", content)
       .`then`(_ =>
-        TypstTs.getSemanticTokens(
+        Typst.getSemanticTokens(
           js.Dynamic.literal(mainFilePath = "/semantic-tokens.typ"),
         ),
       )

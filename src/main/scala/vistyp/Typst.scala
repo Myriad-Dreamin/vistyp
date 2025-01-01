@@ -1,12 +1,13 @@
-package vistyp
+package vistyp.binding
 
 import scala.scalajs.js
-import org.scalajs.dom
 import scala.scalajs.js.annotation._
+
+import org.scalajs.dom
 
 @js.native
 @JSImport("@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs", "$typst")
-object TypstTs extends js.Object {
+private object TypstTs extends js.Object {
 
   def setCompilerInitOptions(options: js.Object): Unit = js.native
   def setRendererInitOptions(options: js.Object): Unit = js.native
@@ -20,11 +21,14 @@ object TypstTs extends js.Object {
 }
 
 object Typst:
+  export TypstTs.*
+
   // /// Begin of Retrieve Wasm Modules from somewhere
   // /// We need a compiler module and a renderer module
   // /// - `@myriaddreamin/typst-ts-web-compiler`
   // /// - `@myriaddreamin/typst-ts-renderer`
   def configureWasm() = {
+    dom.console.log("TypstTs", TypstTs)
 
     // Bundle
     // @ts-ignore
@@ -66,14 +70,14 @@ object Typst:
         dom.console.warn("unknown module source for importing typst module")
     }
 
-    TypstTs.setCompilerInitOptions(
+    Typst.setCompilerInitOptions(
       js.Dynamic.literal(
         getModule = () =>
           compiler || dom.window.asInstanceOf[js.Dynamic].$wasm$typst_compiler,
       ),
     )
 
-    TypstTs.setRendererInitOptions(
+    Typst.setRendererInitOptions(
       js.Dynamic.literal(
         getModule = () =>
           renderer || dom.window.asInstanceOf[js.Dynamic].$wasm$typst_renderer,
@@ -82,11 +86,8 @@ object Typst:
   }
 
   def previewSvg(mainContent: String): js.Promise[String] = {
-    TypstTs
-      .addSource("/preview.typ", mainContent)
-      .`then`(_ =>
-        TypstTs.svg(js.Dynamic.literal(mainFilePath = "/preview.typ")),
-      )
+    addSource("/preview.typ", mainContent)
+      .`then`(_ => svg(js.Dynamic.literal(mainFilePath = "/preview.typ")))
       .asInstanceOf[js.Promise[String]]
   }
   // await $typst.addSource('/preview.typ', mainContent);

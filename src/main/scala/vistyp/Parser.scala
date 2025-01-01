@@ -2,6 +2,7 @@ package vistyp
 
 import scala.util.chaining._
 import scala.util.TupledFunction
+
 import fastparse._, fastparse.ScalaWhitespace._
 
 import vistyp.syntax._
