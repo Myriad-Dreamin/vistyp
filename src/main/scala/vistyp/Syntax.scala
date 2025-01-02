@@ -1,5 +1,7 @@
 package vistyp.syntax
 
+import vistyp.escapeStr
+
 import fastparse._
 
 private type N = Ident
@@ -11,6 +13,16 @@ type TmplExp = Option[(Node, Option[String])]
 sealed abstract class Node {
   var offset: Int = -1;
   var end: Int = -1;
+
+  def repr: String = {
+    this match {
+      case KeyedArg(key, value) => s"${key.repr}: ${value.repr}"
+      case Ident(name)          => name
+      case StrLit(value)        => s""""${escapeStr(value)}""""
+      case IntLit(value)        => value.toString
+      case FloatLit(value)      => value.toString
+    }
+  }
 }
 
 object NodeParse {

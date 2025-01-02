@@ -167,7 +167,7 @@ object Parser {
   )
   def semi[$: P] = P(";").map(_ => Semi(None))
   def primaryExpr[$: P] =
-    P(ident | parens | literal | codeBlock | contentBlock).m
+    P(applyItem | ident | parens | literal | codeBlock | contentBlock).m
   def factor[$: P]: P[Node] = P(unary | primaryExpr.flatMapX(factorR))
 
   // Braces/Args/Params
@@ -268,22 +268,4 @@ object Parser {
       "import|include|let|show|none|auto|set|break|continue|return|case|type|if|else|for|while|and|or|in|not|true|false|context"
         .split('|')*,
     )
-}
-
-private val unescapeStrPattern = "(\\\\[\\\\tfrn\\\"])".r
-def unescapeStr(s: String): String = {
-  unescapeStrPattern.replaceAllIn(
-    s,
-    (m) => {
-      m.group(1) match {
-        case "\\\"" => "\""
-        case "\\\\" => "\\"
-        case "\\n"  => "\n"
-        case "\\t"  => "\t"
-        case "\\r"  => "\r"
-        case "\\f"  => "\f"
-        case other  => other
-      }
-    },
-  )
 }

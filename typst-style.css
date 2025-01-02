@@ -35,7 +35,8 @@ body {
   overflow: scroll;
 }
 .typst-cetz-elem {
-  pointer-events: bounding-box;
+  /* pointer-events: bounding-box; */
+  pointer-events: all;
 }
 
 #svg-edit-menu {

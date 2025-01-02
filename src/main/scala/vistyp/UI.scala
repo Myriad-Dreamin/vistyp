@@ -8,10 +8,13 @@ import com.raquo.laminar.api.L.{*, given}
 import com.raquo.laminar.DomApi
 
 trait Vistyp:
-  val previewContentSignal: Signal[String]
+  val previewContentSignal: Signal[(String, Map[String, String])]
+  val programContentVar: Var[String]
 
   def updateDefinition(code: String): Unit
   def updateDiagram(code: String): Unit
+
+  def onPreviewMounted(panel: dom.Element): Unit
 end Vistyp
 
 class UI(vistyp: Vistyp):
@@ -38,14 +41,6 @@ class UI(vistyp: Vistyp):
   content("t", inner-text)
 }
   """;
-
-  val sampleDiagram = """#{
-  make-ins("c0", (0, 0), "x-circle", (rad: 50))
-  make-ins("c1", (50, 50), "x-rect", (x: 100))
-  make-ins("c2", (200, 0), "x-circle", (rad: 50))
-  make-ins("c1toc2", (0, 0), "x-arrow", (start: "c1", end: "c2"))
-}
-"""
 
   def mainElement(): Element = {
     div(
@@ -345,8 +340,22 @@ class UI(vistyp: Vistyp):
                 "bracketPairColorization.enabled" -> true,
               ),
             )
-            mainEditor.setValue(sampleDiagram);
-            updateDiagram(sampleDiagram);
+
+            mainEditor
+              .getModel()
+              .onDidChangeContent((e: MonacoModelContentChange) => {
+                if (!e.isFlush) {
+                  updateDiagram(mainEditor.getValue());
+                }
+              })
+
+            programContentVar.signal
+              .foreach(content => {
+                mainEditor.setValue(content);
+                updateDiagram(content);
+              })(ctx.owner)
+            updateDiagram(programContentVar.now());
+
           }),
         )
       },
@@ -354,6 +363,7 @@ class UI(vistyp: Vistyp):
   }
 
   def previewPanel(): Element = {
+    import instrument.processSvg
     div(
       cls := "preview",
       styleAttr(
@@ -361,9 +371,15 @@ class UI(vistyp: Vistyp):
       ),
       div(
         cls := "preview-panel",
-        child <-- previewContentSignal.splitOne(identity) { (_, state, _) =>
-          foreignSvgElement(DomApi.unsafeParseSvgString(state))
-        },
+        onMountCallback(ctx => {
+          dom.console.log("previewPanel mounting", ctx.thisNode.ref);
+          vistyp.onPreviewMounted(ctx.thisNode.ref);
+        }),
+        child <-- previewContentSignal.map(state => {
+          val (content, mapping) = state
+          val rawSvg = DomApi.unsafeParseSvgString(content)
+          foreignSvgElement(processSvg(rawSvg, mapping))
+        }),
       ),
     )
   }
