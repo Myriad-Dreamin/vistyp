@@ -49,6 +49,16 @@ class UI(vistyp: Vistyp):
         "height: 100vh",
       ),
       topPanel(),
+    )
+  }
+
+  def cetzMainElement(): Element = {
+    div(
+      cls := "editor-main flex-column",
+      styleAttr(
+        "height: 100vh",
+      ),
+      topPanel(),
       bottomPanel(),
     )
   }

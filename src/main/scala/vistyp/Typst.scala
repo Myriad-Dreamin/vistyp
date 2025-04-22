@@ -41,7 +41,7 @@ object Typst:
       .asInstanceOf[js.Dynamic]
       .$typst$moduleSource
       .asInstanceOf[js.UndefOr[String]]
-      .getOrElse("jsdelivr")
+      .getOrElse("local")
 
     var compiler: js.Dynamic = js.Dynamic.literal()
     var renderer: js.Dynamic = js.Dynamic.literal()
