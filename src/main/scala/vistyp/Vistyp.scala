@@ -191,7 +191,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     val height = 600
 
     val content = s"""
-    #import "@preview/cetz:0.3.1"
+    #import "@preview/cetz:0.5.2"
     // #place(dx: 0pt, dy: 0pt, circle())
     // #place(dx: 50pt, dy: 50pt, square())
     // #place(dx: 200pt, dy: 0pt, circle())
