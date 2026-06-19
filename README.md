@@ -4,6 +4,8 @@ This is a sample project to exhibit how to develop along with/without a local bu
 
 ### Debug the Vistyp
 
+This project uses Scala 3.8 and requires JDK 17 or newer for Scala.js builds. Set `JAVA_HOME` to a JDK 17+ installation if the helper scripts cannot discover one automatically.
+
 Run the vite dev server to get hot-reloading functionality:
 
 ```bash

@@ -4,7 +4,7 @@ lazy val vistyp = project
   .in(file("."))
   .enablePlugins(ScalaJSPlugin)
   .settings(
-    scalaVersion := "3.3.3",
+    scalaVersion := "3.8.4",
 
     // Tell Scala.js that this is an application with a main method
     scalaJSUseMainModuleInitializer := true,

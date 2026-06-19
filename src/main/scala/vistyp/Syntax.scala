@@ -26,11 +26,10 @@ sealed abstract class Node {
 }
 
 object NodeParse {
-  implicit class Mapper[T <: Node](n: => P[T])(implicit ctx: P[_]) {
-    def m = {
+  implicit class Mapper[T <: Node](n: => P[T])(using ctx: P[?]) {
+    def m: P[T] = {
       val l = ctx.index;
-      val r = n.map(node => { node.offset = l; node.end = ctx.index; node });
-      ctx.asInstanceOf[P[T]]
+      n.map(node => { node.offset = l; node.end = ctx.index; node });
     }
   }
 }

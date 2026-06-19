@@ -1,13 +1,23 @@
 import { spawn } from "node:child_process";
+import { withJavaEnv } from "./java-home.mjs";
 
 const isWindows = process.platform === "win32";
 const viteArgs = process.argv.slice(2);
 const children = new Set();
+let childEnv;
 let shuttingDown = false;
 let exitTimer = undefined;
 
+try {
+  childEnv = withJavaEnv();
+} catch (error) {
+  console.error(`[dev] ${error.message}`);
+  process.exit(1);
+}
+
 function start(name, command, args) {
   const child = spawn(command, args, {
+    env: childEnv,
     stdio: "inherit",
     shell: isWindows,
   });

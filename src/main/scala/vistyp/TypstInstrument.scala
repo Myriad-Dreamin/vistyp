@@ -44,7 +44,7 @@ private class InstrumentWorker(tagMapping: Map[String, String]) {
       )
       newElement.setAttribute("data-element-id", s"cetz-app-${tag}")
       newElement.setAttribute("class", "typst-cetz-elem")
-      newElement.append(results.toArray: _*)
+      newElement.append(results.toArray*)
 
       lastResults += newElement
       results = lastResults
@@ -76,7 +76,7 @@ private class InstrumentWorker(tagMapping: Map[String, String]) {
       popTag(tag, lastResults)
     }
 
-    parent.replaceChildren(results.toArray: _*)
+    parent.replaceChildren(results.toArray*)
     parent
   }
 

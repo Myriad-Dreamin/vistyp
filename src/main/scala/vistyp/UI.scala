@@ -353,7 +353,7 @@ class UI(vistyp: Vistyp):
               .foreach(content => {
                 mainEditor.setValue(content);
                 updateDiagram(content);
-              })(ctx.owner)
+              })(using ctx.owner)
             updateDiagram(programContentVar.now());
 
           }),

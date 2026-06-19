@@ -2,7 +2,6 @@ package vistyp
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
-import scala.annotation.newMain
 
 import org.scalajs.dom
 import com.raquo.laminar.api.L.{*, given}
@@ -40,7 +39,7 @@ object VistypImpl extends Vistyp:
 
   def tagMapping = instances.iterator.zipWithIndex.map {
     case (ins, idx) => {
-      val hex = "#" + (idx + 1).formatted("%06x")
+      val hex = "#" + "%06x".format(idx + 1)
       hex -> ins.name
     }
   }.toMap
@@ -159,7 +158,7 @@ let x-arrow(start: (0, 10), end: (50, 10), inner-text: "", mark: (end: ">"), nod
     instances.iterator.zipWithIndex
       .map {
         case (ins, idx) => {
-          val hex = (idx + 1).formatted("%06x")
+          val hex = "%06x".format(idx + 1)
           val args = ins.extraArgs.iterator.flatten.map(_.repr).mkString(", ")
           val deltaPos = (initPos, ins.pos) match {
             case ((x, y), Some((dx, dy))) => {
