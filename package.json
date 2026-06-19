@@ -15,7 +15,9 @@
     "dist/index.mjs"
   ],
   "dependencies": {
-    "@myriaddreamin/typst.ts": "0.5.5-rc7"
+    "@myriaddreamin/typst-ts-renderer": "0.8.0-rc1",
+    "@myriaddreamin/typst-ts-web-compiler": "0.8.0-rc1",
+    "@myriaddreamin/typst.ts": "0.8.0-rc1"
   },
   "devDependencies": {
     "@scala-js/vite-plugin-scalajs": "^1.0.0",
@@ -25,7 +27,7 @@
     "@types/web": "^0.0.188"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",

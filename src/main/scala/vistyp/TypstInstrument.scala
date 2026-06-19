@@ -15,6 +15,10 @@ def processSvg(svg: SVGElement, tagMapping: Map[String, String]): SVGElement = {
 private class InstrumentWorker(tagMapping: Map[String, String]) {
 
   def work(svg: Element): Element = {
+    if (svg.children.length == 0) {
+      return svg
+    }
+
     workChildren(svg, svg.children)
   }
 

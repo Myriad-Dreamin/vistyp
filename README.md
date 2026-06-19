@@ -7,9 +7,7 @@ This is a sample project to exhibit how to develop along with/without a local bu
 Run the vite dev server to get hot-reloading functionality:
 
 ```bash
-# watch scala
-$ sbt "~fastLinkJS"
-# start a vite dev server
+# watch Scala.js and start a vite dev server
 $ yarn run dev
 # open the browser
 $ open http://localhost:5173
@@ -68,9 +66,9 @@ Note that you should align the versions:
 ```json
 {
   "peerDependencies": {
-    "@myriaddreamin/typst.ts": "0.5.4",
-    "@myriaddreamin/typst-ts-renderer": "0.5.4",
-    "@myriaddreamin/typst-ts-web-compiler": "0.5.4"
+    "@myriaddreamin/typst.ts": "0.8.0-rc1",
+    "@myriaddreamin/typst-ts-renderer": "0.8.0-rc1",
+    "@myriaddreamin/typst-ts-web-compiler": "0.8.0-rc1"
   }
 }
 ```

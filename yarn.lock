@@ -357,20 +357,20 @@
   resolved "https://registry.yarnpkg.com/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.0.tgz#3188bcb273a414b0d215fd22a58540b989b9409a"
   integrity sha512-gv3ZRaISU3fjPAgNsriBRqGWQL6quFx04YMPW/zD8XMLsU32mhCCbfbO6KZFLjvYpCZ8zyDEgqsgf+PwPaM7GQ==
 
-"@myriaddreamin/typst-ts-renderer@0.5.4":
-  version "0.5.4"
-  resolved "https://registry.yarnpkg.com/@myriaddreamin/typst-ts-renderer/-/typst-ts-renderer-0.5.4.tgz#2fdaeb158015511007956fc3530ff76fb23ca052"
-  integrity sha512-Z3wvSv78kWgUdr23EXGXvqa/QeRnPjkmLkpu6Ne8pDWPWjHHL1j+Wy7cTdZos6bhAUQGMkdFbO+ZhHoBepTgcw==
+"@myriaddreamin/typst-ts-renderer@0.8.0-rc1":
+  version "0.8.0-rc1"
+  resolved "https://registry.yarnpkg.com/@myriaddreamin/typst-ts-renderer/-/typst-ts-renderer-0.8.0-rc1.tgz#5083d3f72034cef442877a8e56a6a1d1f97ff904"
+  integrity sha512-SEU4JTozt3paUnuJolTkWQk9s/dO1hkaNHXGsfMONcV9VY+Dyt/ypESvaPezAwhKsH0FvPpdOmw2djKlVW/Osw==
 
-"@myriaddreamin/typst-ts-web-compiler@0.5.4":
-  version "0.5.4"
-  resolved "https://registry.yarnpkg.com/@myriaddreamin/typst-ts-web-compiler/-/typst-ts-web-compiler-0.5.4.tgz#07485fcb94795f73e57b19640e9a392315b38e9b"
-  integrity sha512-5jSP6EF0tW1NwQk3hRQ35j8ix4lYD92Pg9FpQma1ppz+1C8ziKbo5vtTRPSGDfxXFBI/ouCNkhwa+C30yj025g==
+"@myriaddreamin/typst-ts-web-compiler@0.8.0-rc1":
+  version "0.8.0-rc1"
+  resolved "https://registry.yarnpkg.com/@myriaddreamin/typst-ts-web-compiler/-/typst-ts-web-compiler-0.8.0-rc1.tgz#a36bc14cfaceb342a3e762eb8b2c6483af31aa65"
+  integrity sha512-Uf62Uh1Oo0r/9XnIt87SaSTe7lWho2Eyse6/d6QGz0SUzDd5DJRedVriz+yY8dBPK8QzCcxMLDsZgo7z9ACqAg==
 
-"@myriaddreamin/typst.ts@0.5.4":
-  version "0.5.4"
-  resolved "https://registry.yarnpkg.com/@myriaddreamin/typst.ts/-/typst.ts-0.5.4.tgz#700cd4e1144119d520484de77f21bed6ceee03d5"
-  integrity sha512-Zn+dwiN+UuhFkl+9vO44fxj1QwHk4yunDrvY48iG3V3pIQsfNVySVOE8wjMSVAh496Mo63BFSIqzZRQj2ShS8g==
+"@myriaddreamin/typst.ts@0.8.0-rc1":
+  version "0.8.0-rc1"
+  resolved "https://registry.yarnpkg.com/@myriaddreamin/typst.ts/-/typst.ts-0.8.0-rc1.tgz#996ff04758ebdd127e85b028eff5f4c6abb226e1"
+  integrity sha512-preiApbD/bwtksehJ7kqUuM9QZfKKQYcv/3dX5gTZiaQgvzfZ7kZXg0PJIM7dJIbnk6NW4bZo83+s3+m+XP5SQ==
   dependencies:
     idb "^7.1.1"
 
