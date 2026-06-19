@@ -1,6 +1,7 @@
 {
   "name": "@myriaddreamin/vistyp",
   "private": true,
+  "packageManager": "pnpm@10.16.1",
   "version": "0.5.4",
   "description": "Simple visualized editor",
   "author": "Myriad Dreamin <camiyoru@gmail.com>",
@@ -36,6 +37,6 @@
     "publish:lib": "npm publish || exit 0"
   },
   "engines": {
-    "node": ">=12"
+    "node": ">=18.12"
   }
 }

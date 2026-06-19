@@ -8,7 +8,7 @@ Run the vite dev server to get hot-reloading functionality:
 
 ```bash
 # watch Scala.js and start a vite dev server
-$ yarn run dev
+$ pnpm dev
 # open the browser
 $ open http://localhost:5173
 ```
@@ -19,7 +19,7 @@ The Vistyp is bundled into a single html file, so you can open it directly in th
 
 ```bash
 # bundle files
-$ yarn run build
+$ pnpm build
 # open the browser
 $ open out/index.html
 ```
@@ -52,7 +52,7 @@ import renderer from "@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.
 
 3. Serve the wasm modules locally via `typst-ts-dev-server` (See [Setup the typst.ts in local](#setup-the-typstts-in-local)):
 
-- runs `yarn dev` in the `typst.ts` project to start a local server
+- runs `pnpm dev` in the `typst.ts` project to start a local server
 - change `window.$typst$moduleSource` manually in the [`src/index.mts`](./src/index.mts) file:
 
   ```ts
@@ -93,7 +93,7 @@ Build the typst.ts project and start a local server:
 # Optional: download the font assets if you haven't done so.
 $ git submodule update --init --recursive .
 # build all of typescript packages
-$ yarn install && yarn run build:pkg
+$ pnpm install && pnpm build:pkg
 # compile typst document for demo
 $ cargo run --bin typst-ts-dev-server -- compile --compiler debug corpus --cat skyzh-cv
 # start a local server
