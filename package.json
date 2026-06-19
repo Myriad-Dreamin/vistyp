@@ -1,6 +1,7 @@
 {
   "name": "@myriaddreamin/vistyp",
   "private": true,
+  "packageManager": "pnpm@10.16.1",
   "version": "0.5.4",
   "description": "Simple visualized editor",
   "author": "Myriad Dreamin <camiyoru@gmail.com>",
@@ -15,9 +16,9 @@
     "dist/index.mjs"
   ],
   "dependencies": {
-    "@myriaddreamin/typst.ts": "0.5.4",
-    "@myriaddreamin/typst-ts-renderer": "0.5.4",
-    "@myriaddreamin/typst-ts-web-compiler": "0.5.4"
+    "@myriaddreamin/typst-ts-renderer": "0.8.0-rc1",
+    "@myriaddreamin/typst-ts-web-compiler": "0.8.0-rc1",
+    "@myriaddreamin/typst.ts": "0.8.0-rc1"
   },
   "devDependencies": {
     "@scala-js/vite-plugin-scalajs": "^1.0.0",
@@ -27,15 +28,16 @@
     "@types/web": "^0.0.188"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/with-java.mjs vite build",
     "preview": "vite preview",
+    "test:scala": "node scripts/with-java.mjs sbt test",
     "test": "vitest",
     "coverage": "vitest run --coverage",
     "publish:dry": "npm publish --dry-run",
     "publish:lib": "npm publish || exit 0"
   },
   "engines": {
-    "node": ">=12"
+    "node": ">=18.12"
   }
 }

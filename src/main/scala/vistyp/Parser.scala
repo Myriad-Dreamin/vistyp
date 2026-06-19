@@ -13,7 +13,7 @@ implicit class SoftErr[$: P](p: => P[Unit]) {
 }
 
 def parseCode(src: String): syntax.MarkupBlock = {
-  fastparse.parse(src, Parser.markupRoot(_)) match {
+  fastparse.parse(src, Parser.markupRoot(using _)) match {
     case Parsed.Success(ast, _) => ast
     case Parsed.Failure(_, index, extra) =>
       println(extra.trace().longAggregateMsg)
