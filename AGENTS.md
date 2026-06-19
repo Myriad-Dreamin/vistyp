@@ -1,5 +1,11 @@
 # Agent Notes
 
+## Git and Pull Requests
+
+- Use Conventional Commits for commit messages.
+- PR descriptions should only list modified features and issue operations, for example `Close #123`.
+- Do not include validation logs, command output, or other execution details in PR descriptions.
+
 ## Typst WASM Source
 
 - The default WASM source must stay on CDN (`jsdelivr`) for normal development and commits.
