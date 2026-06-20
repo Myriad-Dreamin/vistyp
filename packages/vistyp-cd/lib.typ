@@ -1,3 +1,5 @@
+#import "@preview/cetz:0.5.2"
+
 #let x-cd-object(
   width: 64,
   height: 36,
