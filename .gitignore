@@ -22,6 +22,7 @@ dist-ssr
 .bloop
 .bsp
 .metals
+.sbtopts
 
 # Editor directories and files
 .vscode/*
