@@ -224,6 +224,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
   val programContentVar = Var(sampleDiagram)
   val programContentSignal = programContentVar.signal
+  val gridSettingsVar = Var(GridSettings())
 
   def updateProgram() = {
     var content = instances
@@ -237,22 +238,163 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   }
 
   def onPreviewMounted(panel: dom.Element): Unit = {
-    panel.addEventListener("mousedown", e => this.startDrag(panel, e));
-    panel.addEventListener("mousemove", e => this.drag(panel, e));
+    panel.addEventListener(
+      "mousedown",
+      e => this.startDrag(panel, e.asInstanceOf[dom.MouseEvent]),
+    );
+    panel.addEventListener(
+      "mousemove",
+      e => this.drag(panel, e.asInstanceOf[dom.MouseEvent]),
+    );
 
-    panel.addEventListener("mouseup", e => this.endDrag(panel, e));
-    panel.addEventListener("mouseleave", e => this.endDrag(panel, e));
+    panel.addEventListener(
+      "mouseup",
+      e => this.endDrag(panel, e.asInstanceOf[dom.MouseEvent]),
+    );
+    panel.addEventListener(
+      "mouseleave",
+      e => this.endDrag(panel, e.asInstanceOf[dom.MouseEvent]),
+    );
     // panel.addEventListener(
     //   "contextmenu",
     //   e => this.doToggleContextMenu(panel, e),
     // );
   }
 
+  def syncGridMetrics(panel: dom.Element): Unit = {
+    val settings = gridSettingsVar.now()
+    val fallback = {
+      val size = Grid.clean(settings.size)
+      (0d, 0d, size, size)
+    }
+    val shapeMetrics = shapeGridMetrics(panel)
+    val rootMetrics = svgRootGridMetrics(panel)
+
+    val metrics = shapeMetrics.orElse(rootMetrics).getOrElse(fallback)
+    val originX = metrics._1
+    val originY = metrics._2
+    val sizeX = metrics._3
+    val sizeY = metrics._4
+
+    val style = panel.asInstanceOf[js.Dynamic].style
+    style.setProperty("--vistyp-grid-size-x", s"${Grid.clean(sizeX)}px")
+    style.setProperty("--vistyp-grid-size-y", s"${Grid.clean(sizeY)}px")
+    style.setProperty("--vistyp-grid-origin-x", s"${Grid.clean(originX)}px")
+    style.setProperty("--vistyp-grid-origin-y", s"${Grid.clean(originY)}px")
+  }
+
+  private def shapeGridMetrics(
+      panel: dom.Element,
+  ): Option[(Double, Double, Double, Double)] = {
+    val instanceById = instances
+      .flatMap(ins => ins.initPos.orElse(ins.pos).map(pos => ins.name -> (ins, pos)))
+      .toMap
+    val elements = panel.querySelectorAll(".typst-cetz-elem")
+    val panelRect = panel.getBoundingClientRect()
+    val panelDynamic = panel.asInstanceOf[js.Dynamic]
+    val scrollLeft = panelDynamic.scrollLeft.asInstanceOf[Double]
+    val scrollTop = panelDynamic.scrollTop.asInstanceOf[Double]
+    val settings = gridSettingsVar.now()
+
+    val rootMetrics = svgRootGridMetrics(panel)
+    val unitWidth = rootMetrics.map(_._3 / settings.size).getOrElse(1d)
+    val unitHeight = rootMetrics.map(_._4 / settings.size).getOrElse(1d)
+    if (unitWidth <= 0 || unitHeight <= 0) {
+      return None
+    }
+
+    def findMetrics(
+        preferZeroOffset: Boolean,
+    ): Option[(Double, Double, Double, Double)] = {
+      var idx = 0
+      while (idx < elements.length) {
+        val element = elements(idx).asInstanceOf[dom.Element]
+        val elementId = getTypstElementId(element)
+        instanceById.get(elementId) match {
+          case Some((ins, (posX, posY))) =>
+            val offset = snapReferenceOffset(ins)
+            val zeroOffset = offset._1 == 0 && offset._2 == 0
+            if (!preferZeroOffset || zeroOffset) {
+              elementAnchorPoint(element, ins).foreach {
+                case (anchorX, anchorY) =>
+                  val originX =
+                    anchorX - panelRect.left + scrollLeft - posX * unitWidth
+                  val originY =
+                    anchorY - panelRect.top + scrollTop + posY * unitHeight
+                  val gridSizeX = settings.size * unitWidth
+                  val gridSizeY = settings.size * unitHeight
+                  return Some((originX, originY, gridSizeX, gridSizeY))
+              }
+            }
+          case None =>
+        }
+
+        idx += 1
+      }
+
+      None
+    }
+
+    findMetrics(preferZeroOffset = true).orElse(findMetrics(preferZeroOffset = false))
+  }
+
+  private def elementAnchorPoint(
+      element: dom.Element,
+      ins: Instance,
+  ): Option[(Double, Double)] = {
+    val shape = element.querySelector(".typst-shape").asInstanceOf[dom.Element | Null]
+    if (shape == null) {
+      return None
+    }
+
+    val rect = shape.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      return None
+    }
+
+    ins.ty match {
+      case "x-circle" =>
+        Some(((rect.left + rect.right) / 2) -> ((rect.top + rect.bottom) / 2))
+      case _ =>
+        Some(rect.left -> rect.bottom)
+    }
+  }
+
+  private def svgRootGridMetrics(
+      panel: dom.Element,
+  ): Option[(Double, Double, Double, Double)] = {
+    val svg = panel.querySelector("svg").asInstanceOf[dom.SVGElement | Null]
+    if (svg == null) {
+      return None
+    }
+
+    val ctmRaw = svg.asInstanceOf[js.Dynamic].getScreenCTM()
+    if (ctmRaw == null || js.isUndefined(ctmRaw)) {
+      return None
+    }
+
+    val ctm = ctmRaw.asInstanceOf[dom.SVGMatrix]
+    val panelRect = panel.getBoundingClientRect()
+    val panelDynamic = panel.asInstanceOf[js.Dynamic]
+    val scrollLeft = panelDynamic.scrollLeft.asInstanceOf[Double]
+    val scrollTop = panelDynamic.scrollTop.asInstanceOf[Double]
+    val settings = gridSettingsVar.now()
+    Some(
+      (
+        ctm.e - panelRect.left + scrollLeft,
+        ctm.f - panelRect.top + scrollTop,
+        settings.size * math.abs(ctm.a),
+        settings.size * math.abs(ctm.d),
+      ),
+    )
+  }
+
   var selectedElem: Option[dom.Element] = None
   var offset: (Double, Double) = (0, 0)
   var svgElem: Option[dom.SVGElement] = None
   var transform = Option.empty[dom.SVGTransform]
-  def startDrag(panel: dom.Element, evt: dom.WheelEvent): Unit = {
+  var dragStartPos: Option[(Double, Double)] = None
+  def startDrag(panel: dom.Element, evt: dom.MouseEvent): Unit = {
 
     val targetOpt =
       findTaggedTypstElement(evt.target.asInstanceOf[dom.Element]);
@@ -267,6 +409,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     dom.console.log("svgElem", svgElem);
 
     selectedElem = Some(target)
+    evt.preventDefault()
     offset = getMousePosition(evt)
 
     val transforms = target
@@ -296,16 +439,18 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     val typstId = getTypstElementId(target)
     println(s"find typstId $typstId in $instances")
+    dragStartPos =
+      instances.find(_.name == typstId).flatMap(_.pos).orElse(Some(0d -> 0d))
     instances = instances.map { ins =>
       if (ins.name == typstId) {
-        ins.copy(initPos = ins.pos)
+        ins.copy(initPos = dragStartPos)
       } else {
         ins
       }
     }
   }
 
-  def drag(panel: dom.Element, evt: dom.WheelEvent): Unit = {
+  def drag(panel: dom.Element, evt: dom.MouseEvent): Unit = {
     val selectedElement = selectedElem match {
       case Some(selectedElem) => selectedElem
       case None               => return
@@ -313,10 +458,11 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     evt.preventDefault()
     val coord = getMousePosition(evt)
-    val x = coord._1 - offset._1
-    val y = coord._2 - offset._2
-    transform.get.setTranslate(x, y)
+    val rawX = coord._1 - offset._1
+    val rawY = coord._2 - offset._2
     val typstId = getTypstElementId(selectedElement)
+    val (x, y) = snappedDragOffset(rawX, rawY, evt.altKey, typstId)
+    transform.get.setTranslate(x, y)
     println(s"find typstId $typstId in $instances")
     instances = instances.map { ins =>
       if (ins.name == typstId) {
@@ -328,19 +474,21 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     // updatePreview()
   }
 
-  def endDrag(panel: dom.Element, evt: dom.WheelEvent): Unit = {
+  def endDrag(panel: dom.Element, evt: dom.MouseEvent): Unit = {
     val selectedElement = selectedElem match {
       case Some(selectedElem) => selectedElem
       case None               => return
     }
     selectedElem = None
+    dragStartPos = None
 
     val typstId = getTypstElementId(selectedElement)
     println(s"find typstId $typstId in $instances")
     val ins = instances.find(_.name == typstId).get
     if (ins.pos.isDefined) {
-      val x = ins.initPos.get._1 + ins.pos.get._1
-      val y = ins.initPos.get._2 - ins.pos.get._2
+      val initPos = ins.initPos.getOrElse(0d -> 0d)
+      val x = Grid.clean(initPos._1 + ins.pos.get._1)
+      val y = Grid.clean(initPos._2 - ins.pos.get._2)
       instances = instances.map { ins =>
         if (ins.name == typstId) {
           ins.copy(pos = Some(x -> y), initPos = None)
@@ -353,13 +501,53 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     }
   }
 
+  private def snappedDragOffset(
+      rawX: Double,
+      rawY: Double,
+      bypassSnap: Boolean,
+      typstId: String,
+  ): (Double, Double) = {
+    val origin = dragStartPos.getOrElse(0d -> 0d)
+    val settings = gridSettingsVar.now()
+    if (!Grid.active(settings) || bypassSnap) {
+      Grid.clean(rawX) -> Grid.clean(rawY)
+    } else {
+      val snappedPosition = Grid.snapPointWithOffset(
+        (origin._1 + rawX) -> (origin._2 - rawY),
+        snapReferenceOffset(typstId),
+        settings,
+      )
+      Grid.clean(snappedPosition._1 - origin._1) ->
+        Grid.clean(origin._2 - snappedPosition._2)
+    }
+  }
+
+  private def snapReferenceOffset(typstId: String): (Double, Double) =
+    instances
+      .find(_.name == typstId)
+      .map(snapReferenceOffset)
+      .getOrElse(0d -> 0d)
+
+  private def snapReferenceOffset(ins: Instance): (Double, Double) =
+    ins.ty match {
+      case "x-circle" =>
+        val radius = numberArg(ins, "rad").getOrElse(200d)
+        (-radius) -> (-radius)
+      case _ => 0d -> 0d
+    }
+
+  private def numberArg(ins: Instance, key: String): Option[Double] =
+    ins.extraArgs.toList.flatten.collectFirst {
+      case KeyedArg(Ident(argName), value) if argName == key => getNumber(value)
+    }
+
   def getTypstElementId(target: dom.Element): String = {
     target.getAttribute("data-element-id").replace("cetz-app-", "")
   }
 
   /** A Fetch Action from DOM
     */
-  def getMousePosition(evt: dom.WheelEvent) = {
+  def getMousePosition(evt: dom.MouseEvent) = {
     val CTM = svgElem.get
       .asInstanceOf[js.Dynamic]
       .getScreenCTM()
