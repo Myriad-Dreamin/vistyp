@@ -87,11 +87,20 @@ object Typst:
     )
   }
 
-  def previewSvg(mainContent: String): js.Promise[String] = {
-    addSource("/preview.typ", mainContent)
+  def previewSvg(
+      mainContent: String,
+      sources: Map[String, String] = Map.empty,
+  ): js.Promise[String] = {
+    addSources(sources + ("/preview.typ" -> mainContent))
       .`then`(_ => compileSvgWithDiagnostics("/preview.typ"))
       .`catch`((error: Any) => diagnosticSvg(formatDiagnosticError(error)))
       .asInstanceOf[js.Promise[String]]
+  }
+
+  private def addSources(sources: Map[String, String]): js.Promise[Unit] = {
+    sources.foldLeft(js.Promise.resolve(())) { case (promise, (path, content)) =>
+      promise.`then`(_ => addSource(path, content))
+    }
   }
 
   private def compileSvgWithDiagnostics(

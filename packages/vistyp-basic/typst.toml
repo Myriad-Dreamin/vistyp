@@ -1,0 +1,10 @@
+[package]
+name = "vistyp-basic"
+version = "0.1.0"
+entrypoint = "lib.typ"
+authors = ["Vistyp"]
+license = "Apache-2.0"
+description = "Basic read-only Vistyp CeTZ resources."
+keywords = ["cetz", "diagram", "vistyp"]
+categories = ["visualization"]
+compiler = "0.13.1"

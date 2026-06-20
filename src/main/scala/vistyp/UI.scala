@@ -11,9 +11,12 @@ trait Vistyp:
   val previewContentSignal: Signal[(String, Map[String, String])]
   val programContentVar: Var[String]
   val gridSettingsVar: Var[GridSettings]
+  val assetLibraryStateSignal: Signal[AssetLibraryState]
 
   def updateDefinition(code: String): Unit
   def updateDiagram(code: String): Unit
+  def loadAssetIndex(url: String): Unit
+  def insertResource(resourceId: String, name: String): Unit
 
   def onPreviewMounted(panel: dom.Element): Unit
   def syncGridMetrics(panel: dom.Element): Unit
@@ -21,6 +24,14 @@ end Vistyp
 
 class UI(vistyp: Vistyp):
   import vistyp.*;
+
+  private val defaultLibraryUrl =
+    "https://raw.githubusercontent.com/Myriad-Dreamin/vistyp/online-resources/typst-index.json"
+  private val libraryUrlVar = Var(defaultLibraryUrl)
+  private val selectedResourceIdVar = Var(
+    BuiltinAssets.resources.headOption.map(_.id).getOrElse(""),
+  )
+  private val insertNameVar = Var("")
 
   val builtinDefinitions = """#let x-circle(rad: 200, inner-text: "") = {
   circle((0, 0), radius: rad, name: node-label)
@@ -181,42 +192,35 @@ class UI(vistyp: Vistyp):
   // });
 
   def definitionGroup(): Element = {
-    // <div class="editor-action-group">
-    // <span>definition:</span>
-    // <select id="preview-selector" class="editor-code-select"></select>
-    // <span>from</span>
-    // <div
-    //     class="flex-row"
-    //     style="
-    //     display: inline-flex;
-    //     justify-content: space-around;
-    //     gap: 5px;
-    //     "
-    // >
-    //     <select
-    //     id="definition-source-selector"
-    //     class="editor-code-select"
-    //     style="width: 5em"
-    //     >
-    //     <option value="builtin">Builtin</option>
-    //     <option value="url">Url</option>
-    //     <option value="file">File</option>
-    //     </select>
-    //     <input
-    //     id="definition-source-value"
-    //     class="editor-input-box"
-    //     type="text"
-    //     placeholder="https://..."
-    //     />
-    //     <button
-    //     id="definition-source-confirm"
-    //     class="editor-input-button"
-    //     >
-    //     Pull
-    //     </button>
-    // </div>
-    // </div>
-    div()
+    div(
+      cls := "editor-action-group",
+      span("library:"),
+      input(
+        cls := "editor-input-box editor-library-url",
+        typ := "text",
+        placeholder := "index.json URL",
+        value <-- libraryUrlVar.signal,
+        onInput.mapToValue --> libraryUrlVar,
+      ),
+      button(
+        cls := "editor-input-button",
+        "Load",
+        onClick.mapTo(()) --> { _ =>
+          loadAssetIndex(libraryUrlVar.now())
+        },
+      ),
+      span(
+        cls := "editor-library-status",
+        child.text <-- assetLibraryStateSignal.map { state =>
+          if state.loading then "loading"
+          else
+            state.error.getOrElse {
+              if state.packages.isEmpty then "builtin"
+              else s"${state.packages.length} package(s)"
+            }
+        },
+      ),
+    )
   }
 
 //         const checkDefinitionSource = () => {
@@ -276,29 +280,39 @@ class UI(vistyp: Vistyp):
 //         };
 
   def elementGroup(): Element = {
-    //  <div class="editor-action-group">
-    // <span>element:</span>
-    // <div
-    //     class="flex-row"
-    //     style="
-    //     display: inline-flex;
-    //     justify-content: space-around;
-    //     gap: 5px;
-    //     "
-    // >
-    //     <select id="insert-selector" class="editor-code-select"></select>
-    //     <input
-    //     id="insert-name"
-    //     class="editor-input-box"
-    //     type="text"
-    //     placeholder="name"
-    //     />
-    //     <button id="insert-elem" class="editor-input-button">
-    //     Insert
-    //     </button>
-    // </div>
-    // </div>
-    div()
+    div(
+      cls := "editor-action-group",
+      span("element:"),
+      select(
+        cls := "editor-code-select editor-resource-select",
+        value <-- selectedResourceIdVar.signal,
+        onChange.mapToValue --> selectedResourceIdVar,
+        children <-- assetLibraryStateSignal.map { state =>
+          (BuiltinAssets.resources ++ state.packages.flatMap(_.resources)).map {
+            resource =>
+              option(
+                value := resource.id,
+                s"${resource.functionName} · ${resource.packageLabel}",
+              )
+          }
+        },
+      ),
+      input(
+        cls := "editor-input-box editor-insert-name",
+        typ := "text",
+        placeholder := "name",
+        value <-- insertNameVar.signal,
+        onInput.mapToValue --> insertNameVar,
+      ),
+      button(
+        cls := "editor-input-button",
+        "Insert",
+        onClick.mapTo(()) --> { _ =>
+          insertResource(selectedResourceIdVar.now(), insertNameVar.now())
+          insertNameVar.set("")
+        },
+      ),
+    )
   }
 
   def viewportGroup(): Element = {
