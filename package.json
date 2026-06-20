@@ -29,9 +29,9 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "node scripts/with-java.mjs vite build",
+    "build": "vite build",
     "preview": "vite preview",
-    "test:scala": "node scripts/with-java.mjs sbt test",
+    "test:scala": "sbt test",
     "test": "vitest",
     "coverage": "vitest run --coverage",
     "publish:dry": "npm publish --dry-run",
