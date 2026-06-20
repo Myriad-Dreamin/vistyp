@@ -102,9 +102,9 @@ private class InstrumentWorker(tagMapping: Map[String, String]) {
       val stroke = elem.getAttribute("stroke")
       val tag = tagMapping.get(stroke)
       return tag match {
-        case Some(tag) => RawTypstElem.Tag(tag)
-        case None      => RawTypstElem.Empty(elem)
-      }
+          case Some(tag) => RawTypstElem.Tag(tag)
+          case None      => RawTypstElem.Empty(elem)
+        }
     }
 
     elem.tagName match {

@@ -10,11 +10,13 @@ import com.raquo.laminar.DomApi
 trait Vistyp:
   val previewContentSignal: Signal[(String, Map[String, String])]
   val programContentVar: Var[String]
+  val gridSettingsVar: Var[GridSettings]
 
   def updateDefinition(code: String): Unit
   def updateDiagram(code: String): Unit
 
   def onPreviewMounted(panel: dom.Element): Unit
+  def syncGridMetrics(panel: dom.Element): Unit
 end Vistyp
 
 class UI(vistyp: Vistyp):
@@ -92,6 +94,38 @@ class UI(vistyp: Vistyp):
             "Element",
           ),
         ),
+        gridControls(),
+      ),
+    )
+  }
+
+  def gridControls(): Element = {
+    div(
+      cls := "editor-action-group editor-grid-controls",
+      label(
+        cls := "editor-grid-toggle",
+        input(
+          typ := "checkbox",
+          checked <-- gridSettingsVar.signal.map(_.enabled),
+          onInput.mapToChecked --> { enabled =>
+            gridSettingsVar.update(_.copy(enabled = enabled))
+          },
+        ),
+        span("Grid"),
+      ),
+      input(
+        cls := "editor-input-box editor-grid-size",
+        typ := "number",
+        value <-- gridSettingsVar.signal.map(settings =>
+          Grid.clean(settings.size).toString,
+        ),
+        onInput.mapToValue --> { rawValue =>
+          rawValue.toDoubleOption
+            .filter(size => size > 0)
+            .foreach(size =>
+              gridSettingsVar.update(_.copy(size = Grid.clean(size))),
+            )
+        },
       ),
     )
   }
@@ -370,18 +404,37 @@ class UI(vistyp: Vistyp):
         "flex: 6",
       ),
       div(
-        cls := "preview-panel",
+        cls <-- gridSettingsVar.signal.map(settings =>
+          if Grid.active(settings) then "preview-panel preview-panel-grid"
+          else "preview-panel",
+        ),
+        styleAttr <-- gridSettingsVar.signal.map(settings =>
+          s"--vistyp-grid-size: ${Grid.clean(settings.size)}px",
+        ),
         onMountCallback(ctx => {
           dom.console.log("previewPanel mounting", ctx.thisNode.ref);
           vistyp.onPreviewMounted(ctx.thisNode.ref);
+          previewContentSignal.foreach(_ =>
+            scheduleGridMetricsSync(ctx.thisNode.ref),
+          )(using ctx.owner)
+          gridSettingsVar.signal.foreach(_ =>
+            scheduleGridMetricsSync(ctx.thisNode.ref),
+          )(using ctx.owner)
+          ctx.thisNode.ref.addEventListener(
+            "scroll",
+            _ => scheduleGridMetricsSync(ctx.thisNode.ref),
+          )
         }),
-        child <-- previewContentSignal.map(state => {
-          val (content, mapping) = state
+        child <-- previewContentSignal.map { case (content, mapping) =>
           val rawSvg = DomApi.unsafeParseSvgString(content)
           foreignSvgElement(processSvg(rawSvg, mapping))
-        }),
+        },
       ),
     )
+  }
+
+  private def scheduleGridMetricsSync(panel: dom.Element): Unit = {
+    dom.window.setTimeout(() => vistyp.syncGridMetrics(panel), 0)
   }
 
 end UI
