@@ -61,10 +61,10 @@ object VistypImpl extends Vistyp:
   def updateDiagram(code: String): Unit = {
     val program = parseCode(code)
     dom.console.log("diagram program", program.toString())
-    val newInstances = program match {
-      case syntax.MarkupBlock(List(syntax.Block(stmts))) =>
+    val newInstances = DiagramParser.statements(program) match {
+      case Some(stmts) =>
         stmts.flatMap(constructInstance)
-      case program =>
+      case None =>
         dom.console.error("Invalid diagram program", program)
         List()
     }

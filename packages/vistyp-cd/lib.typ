@@ -26,10 +26,15 @@
   node-label: "",
 ) = {
   import cetz.draw: *
+  let morphism-name = if node-label == "" {
+    "morphism"
+  } else {
+    node-label
+  }
 
   set-style(mark: (fill: none, size: 14))
-  line(start, end, name: "morphism", mark: mark)
-  content("morphism.centroid", label)
+  line(start, end, name: morphism-name, mark: mark)
+  content(morphism-name + ".centroid", label)
 }
 
 #let x-cd-2cell(
@@ -40,8 +45,13 @@
   node-label: "",
 ) = {
   import cetz.draw: *
+  let cell-name = if node-label == "" {
+    "cell"
+  } else {
+    node-label
+  }
 
   set-style(mark: (fill: none, size: 10))
-  line(start, end, name: "cell", mark: mark)
-  content("cell.centroid", label)
+  line(start, end, name: cell-name, mark: mark)
+  content(cell-name + ".centroid", label)
 }

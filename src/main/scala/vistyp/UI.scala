@@ -26,7 +26,7 @@ class UI(vistyp: Vistyp):
   import vistyp.*;
 
   private val defaultLibraryUrl =
-    "https://raw.githubusercontent.com/Myriad-Dreamin/vistyp/online-resources/typst-index.json"
+    "https://raw.githubusercontent.com/Myriad-Dreamin/vistyp/explore-commutative-diagrams/typst-index.json"
   private val libraryUrlVar = Var(defaultLibraryUrl)
   private val selectedResourceIdVar = Var(
     BuiltinAssets.resources.headOption.map(_.id).getOrElse(""),

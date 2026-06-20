@@ -21,6 +21,23 @@ sealed abstract class Node {
       case StrLit(value)        => s""""${escapeStr(value)}""""
       case IntLit(value)        => value.toString
       case FloatLit(value)      => value.toString
+      case BoolLit(value)       => value.toString
+      case NoneLit              => "none"
+      case AutoLit              => "auto"
+      case LengthLit(value, unit) => s"${value.repr}$unit"
+      case ArgsLit(values) =>
+        values.map(_.repr).mkString("(", ", ", ")")
+      case Apply(lhs, rhs) =>
+        s"${lhs.repr}(${rhs.map(_.repr).mkString(", ")})"
+      case Select(lhs, rhs) => s"${lhs.repr}.${rhs.repr}"
+      case UnOp("..", lhs)  => s"..${lhs.repr}"
+      case UnOp(op, lhs)    => s"$op${lhs.repr}"
+      case BinOp(op, lhs, rhs) =>
+        s"${lhs.repr} $op ${rhs.repr}"
+      case LabelLit(value) => s"<$value>"
+      case RawContent(value) => s"`$value`"
+      case MarkupContent(value) => value
+      case node => node.toString
     }
   }
 }
