@@ -1,5 +1,11 @@
 #import "@preview/cetz:0.5.2"
 
+#let math-label(label) = if type(label) == str {
+  eval(label, mode: "math")
+} else {
+  label
+}
+
 #let x-note(
   width: 120,
   height: 72,
@@ -18,5 +24,5 @@
     stroke: stroke,
     radius: 4pt,
   )
-  content(node-label, label)
+  content(node-label, math-label(label))
 }

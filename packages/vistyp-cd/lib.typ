@@ -1,5 +1,11 @@
 #import "@preview/cetz:0.5.2"
 
+#let math-label(label) = if type(label) == str {
+  eval(label, mode: "math")
+} else {
+  label
+}
+
 #let x-cd-object(
   width: 64,
   height: 36,
@@ -17,7 +23,7 @@
     fill: fill,
     stroke: stroke,
   )
-  content(node-label, label)
+  content(node-label, math-label(label))
 }
 
 #let x-cd-arrow(
@@ -25,6 +31,7 @@
   end: "B.west",
   label: "f",
   arrow-mark: (end: ">"),
+  label-offset: (0, 12),
   node-label: "",
 ) = {
   import cetz.draw: line, content, set-style
@@ -36,7 +43,13 @@
 
   set-style(mark: (fill: none, size: 14))
   line(start, end, name: morphism-name, mark: arrow-mark)
-  content(morphism-name + ".centroid", label)
+  content(
+    (rel: label-offset, to: morphism-name + ".centroid"),
+    math-label(label),
+    fill: white,
+    stroke: none,
+    padding: 2pt,
+  )
 }
 
 #let x-cd-2cell(
@@ -44,6 +57,7 @@
   end: "g.centroid",
   label: "",
   arrow-mark: (end: ">"),
+  label-offset: (0, 10),
   node-label: "",
 ) = {
   import cetz.draw: line, content, set-style
@@ -55,5 +69,11 @@
 
   set-style(mark: (fill: none, size: 10))
   line(start, end, name: cell-name, mark: arrow-mark)
-  content(cell-name + ".centroid", label)
+  content(
+    (rel: label-offset, to: cell-name + ".centroid"),
+    math-label(label),
+    fill: white,
+    stroke: none,
+    padding: 2pt,
+  )
 }
