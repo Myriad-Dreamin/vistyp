@@ -11,5 +11,18 @@
     "compiler": "0.13.1",
     "updatedAt": 1781938218,
     "θload": "./packages/vistyp-basic"
+  },
+  {
+    "name": "vistyp-cd",
+    "version": "0.1.0",
+    "entrypoint": "lib.typ",
+    "authors": ["Vistyp"],
+    "license": "Apache-2.0",
+    "description": "Commutative diagram resources for Vistyp.",
+    "keywords": ["cetz", "commutative-diagram", "category-theory", "vistyp"],
+    "categories": ["visualization"],
+    "compiler": "0.13.1",
+    "updatedAt": 1781949386,
+    "θload": "./packages/vistyp-cd"
   }
 ]
