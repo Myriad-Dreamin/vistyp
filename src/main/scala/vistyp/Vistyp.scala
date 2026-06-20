@@ -150,7 +150,26 @@ let x-arrow(start: (0, 10), end: (50, 10), inner-text: "", mark: (end: ">"), nod
     """
   }
 
-  def genInstances(): String = {
+  def genPackageImports(): (String, Map[AssetPackageKey, String]) = {
+    val packageByKey = loadedAssetPackages.map(pkg => pkg.key -> pkg).toMap
+    val usedKeys = instances
+      .flatMap(ins => ResourceRef.parse(ins.ty).map(_.packageKey))
+      .distinct
+      .filter(packageByKey.contains)
+    val aliases = usedKeys.zipWithIndex.map { case (key, idx) =>
+      key -> s"pkg$idx"
+    }.toMap
+    val imports = aliases
+      .map { case (key, alias) =>
+        val pkg = packageByKey(key)
+        s"""import "${pkg.entrypointVirtualPath}" as $alias"""
+      }
+      .mkString("\n")
+
+    imports -> aliases
+  }
+
+  def genInstances(packageAliases: Map[AssetPackageKey, String]): String = {
     val mapping = tagMapping
 
     var initPos: (Double, Double) = (0, 0)
@@ -159,7 +178,16 @@ let x-arrow(start: (0, 10), end: (50, 10), inner-text: "", mark: (end: ">"), nod
       .map {
         case (ins, idx) => {
           val hex = "%06x".format(idx + 1)
-          val args = ins.extraArgs.iterator.flatten.map(_.repr).mkString(", ")
+          val args = (ins.extraArgs.iterator.flatten.map(_.repr).toList :+
+            s"""node-label: "${escapeStr(ins.name)}"""").mkString(", ")
+          val callable = ResourceRef
+            .parse(ins.ty)
+            .flatMap(ref =>
+              packageAliases.get(ref.packageKey).map(alias =>
+                s"$alias.${ref.functionName}",
+              ),
+            )
+            .getOrElse(ins.ty)
           val deltaPos = (initPos, ins.pos) match {
             case ((x, y), Some((dx, dy))) => {
               initPos = (dx, dy)
@@ -172,7 +200,7 @@ let x-arrow(start: (0, 10), end: (50, 10), inner-text: "", mark: (end: ">"), nod
           s"""
 translate($deltaPos)
 rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
-${ins.ty}(${args}, node-label: "${ins.name}")
+$callable($args)
 rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
           """
         }
@@ -188,6 +216,8 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     val width = 600
     val height = 600
+    val (packageImports, packageAliases) = genPackageImports()
+    val packageSources = loadedAssetPackages.flatMap(_.files).toMap
 
     val content = s"""
     #import "@preview/cetz:0.5.2"
@@ -202,12 +232,13 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       import cetz.draw: *
       let node-label = ""
       ${genSignatures()}
-      ${genInstances()}
+      $packageImports
+      ${genInstances(packageAliases)}
     }, length: 1pt)
     """
     // println(s"preview main $content")
     Typst
-      .previewSvg(content)
+      .previewSvg(content, packageSources)
       .`then` { svg =>
         // dom.console.log("svgToCheck", js.Dynamic.literal(svg = svg))
         previewContentVar.update(_ => (svg, tagMapping))
@@ -225,6 +256,65 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   val programContentVar = Var(sampleDiagram)
   val programContentSignal = programContentVar.signal
   val gridSettingsVar = Var(GridSettings())
+  val assetLibraryStateVar = Var(AssetLibraryState())
+  val assetLibraryStateSignal = assetLibraryStateVar.signal
+
+  private def loadedAssetPackages: List[LoadedAssetPackage] =
+    assetLibraryStateVar.now().packages
+
+  private def allAssetResources: List[AssetResource] =
+    BuiltinAssets.resources ++ loadedAssetPackages.flatMap(_.resources)
+
+  def loadAssetIndex(url: String): Unit = {
+    val trimmedUrl = url.trim
+    if trimmedUrl.isEmpty then
+      assetLibraryStateVar.update(
+        _.copy(sourceUrl = "", loading = false, error = Some("Asset index URL is empty")),
+      )
+      return
+
+    assetLibraryStateVar.update(
+      _.copy(sourceUrl = trimmedUrl, loading = true, error = None),
+    )
+    AssetLibraryLoader
+      .loadIndex(trimmedUrl)
+      .`then`((packages: List[LoadedAssetPackage]) => {
+        assetLibraryStateVar.set(
+          AssetLibraryState(
+            sourceUrl = trimmedUrl,
+            loading = false,
+            packages = packages,
+            error = None,
+          ),
+        )
+        updatePreview()
+      })
+      .`catch`((error: Any) => {
+        assetLibraryStateVar.update(
+          _.copy(loading = false, error = Some(errorMessage(error))),
+        )
+      })
+  }
+
+  def insertResource(resourceId: String, name: String): Unit = {
+    val resource = allAssetResources.find(_.id == resourceId) match {
+      case Some(resource) => resource
+      case None =>
+        assetLibraryStateVar.update(
+          _.copy(error = Some(s"Unknown asset resource: $resourceId")),
+        )
+        return
+    }
+    val nodeName =
+      if name.trim.nonEmpty then name.trim
+      else s"node-${math.random().toString.replace("0.", "").take(6)}"
+    val args = resource.args
+      .map(arg => s"${arg.name}: ${arg.defaultValue}")
+      .mkString(", ")
+    val item =
+      s"""make-ins("${escapeStr(nodeName)}", (0, 0), "${escapeStr(resource.id)}", ($args))"""
+    programContentVar.update(content => appendMakeIns(content, item))
+  }
 
   def updateProgram() = {
     var content = instances
@@ -236,6 +326,18 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     programContentVar.update(_ => content)
   }
+
+  private def appendMakeIns(content: String, item: String): String = {
+    val trimmed = content.trim
+    if trimmed.startsWith("#{") && trimmed.endsWith("}") then
+      val body = trimmed.drop(2).dropRight(1).trim
+      if body.isEmpty then s"#{\n  $item\n}"
+      else s"#{\n  $body\n  $item\n}"
+    else s"#{\n  $item\n}"
+  }
+
+  private def errorMessage(error: Any): String =
+    Option(error).fold("Unknown asset library error")(_.toString)
 
   def onPreviewMounted(panel: dom.Element): Unit = {
     panel.addEventListener(
