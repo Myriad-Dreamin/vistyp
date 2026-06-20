@@ -8,7 +8,7 @@
   stroke: rgb("#384250"),
   node-label: "",
 ) = {
-  import cetz.draw: *
+  import cetz.draw: rect, content
 
   rect(
     (0, 0),
