@@ -36,6 +36,7 @@ end bootstrapVistyp
 object VistypImpl extends Vistyp:
   var defMap: Map[String, Def] = Map.empty
   var instances: List[Instance] = List()
+  private var previewResizeObserver: Option[dom.ResizeObserver] = None
 
   def tagMapping = instances.iterator.zipWithIndex.map {
     case (ins, idx) => {
@@ -61,10 +62,10 @@ object VistypImpl extends Vistyp:
   def updateDiagram(code: String): Unit = {
     val program = parseCode(code)
     dom.console.log("diagram program", program.toString())
-    val newInstances = program match {
-      case syntax.MarkupBlock(List(syntax.Block(stmts))) =>
+    val newInstances = DiagramParser.statements(program) match {
+      case Some(stmts) =>
         stmts.flatMap(constructInstance)
-      case program =>
+      case None =>
         dom.console.error("Invalid diagram program", program)
         List()
     }
@@ -214,8 +215,6 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     // val state = PreviewState(defMap, instances)
 
-    val width = 600
-    val height = 600
     val (packageImports, packageAliases) = genPackageImports()
     val packageSources = loadedAssetPackages.flatMap(_.files).toMap
 
@@ -226,7 +225,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     // #place(dx: 200pt, dy: 0pt, circle())
     // #place(dx: 50pt, dy: 50pt, square())
     
-    // #set page(margin: 1pt, width: ${width + 2}pt, height: ${height + 2}pt)
+    #set page(width: auto, height: auto, margin: 12pt)
     #let debug-label(_) = ()
     #cetz.canvas({
       import cetz.draw: *
@@ -246,10 +245,12 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   }
 
   val sampleDiagram = """#{
-  make-ins("c0", (0, 0), "x-circle", (rad: 50))
-  make-ins("c1", (50, 50), "x-rect", (x: 100))
-  make-ins("c2", (200, 0), "x-circle", (rad: 50))
-  make-ins("c1toc2", (0, 0), "x-arrow", (start: "c1.center", end: "c2.center"))
+  make-ins("A", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(X,x)"))
+  make-ins("B", (-160, -110), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(Y,p(x))"))
+  make-ins("C", (160, -110), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(Y,q(x))"))
+  make-ins("p", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south-west", end: "B.north-east", label: "p_*", label-offset: (-12, 10)))
+  make-ins("q", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south-east", end: "C.north-west", label: "q_*", label-offset: (12, 10)))
+  make-ins("gamma", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "B.east", end: "C.west", label: "gamma [a]", label-offset: (0, -14)))
 }
 """
 
@@ -340,6 +341,12 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     Option(error).fold("Unknown asset library error")(_.toString)
 
   def onPreviewMounted(panel: dom.Element): Unit = {
+    previewResizeObserver.foreach(_.disconnect())
+    val observer = new dom.ResizeObserver((_, _) => schedulePreviewLayoutSync(panel))
+    observer.observe(panel)
+    previewResizeObserver = Some(observer)
+    schedulePreviewLayoutSync(panel)
+
     panel.addEventListener(
       "mousedown",
       e => this.startDrag(panel, e.asInstanceOf[dom.MouseEvent]),
@@ -362,6 +369,59 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     //   e => this.doToggleContextMenu(panel, e),
     // );
   }
+
+  private def schedulePreviewLayoutSync(panel: dom.Element): Unit = {
+    dom.window.requestAnimationFrame { _ =>
+      fitPreviewToPanel(panel)
+      syncGridMetrics(panel)
+    }
+  }
+
+  def fitPreviewToPanel(panel: dom.Element): Unit = {
+    val svg = panel.querySelector("svg").asInstanceOf[dom.SVGSVGElement | Null]
+    if (svg == null) {
+      return
+    }
+
+    svgNaturalSize(svg) match {
+      case Some((naturalWidth, naturalHeight)) =>
+        val panelRect = panel.getBoundingClientRect()
+        val computedStyle = dom.window.getComputedStyle(panel)
+        val horizontalPadding =
+          cssPx(computedStyle.paddingLeft) + cssPx(computedStyle.paddingRight)
+        val verticalPadding =
+          cssPx(computedStyle.paddingTop) + cssPx(computedStyle.paddingBottom)
+        val availableWidth = math.max(1d, panelRect.width - horizontalPadding)
+        val availableHeight = math.max(1d, panelRect.height - verticalPadding)
+        val scale = math.min(availableWidth / naturalWidth, availableHeight / naturalHeight)
+
+        if (scale <= 0 || scale.isNaN || scale.isInfinity) {
+          return
+        }
+
+        val svgStyle = svg.asInstanceOf[js.Dynamic].style
+        svgStyle.setProperty("width", s"${Grid.clean(naturalWidth * scale)}px")
+        svgStyle.setProperty("height", s"${Grid.clean(naturalHeight * scale)}px")
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet")
+
+      case None =>
+    }
+  }
+
+  private def svgNaturalSize(svg: dom.SVGSVGElement): Option[(Double, Double)] = {
+    val viewBox = svg.viewBox.baseVal
+    if (viewBox != null && viewBox.width > 0 && viewBox.height > 0) {
+      return Some(viewBox.width -> viewBox.height)
+    }
+
+    val width = svg.width.baseVal.value
+    val height = svg.height.baseVal.value
+    if (width > 0 && height > 0) Some(width -> height)
+    else None
+  }
+
+  private def cssPx(value: String): Double =
+    value.stripSuffix("px").toDoubleOption.getOrElse(0d)
 
   def syncGridMetrics(panel: dom.Element): Unit = {
     val settings = gridSettingsVar.now()

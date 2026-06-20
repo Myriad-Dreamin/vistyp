@@ -19,6 +19,7 @@ trait Vistyp:
   def insertResource(resourceId: String, name: String): Unit
 
   def onPreviewMounted(panel: dom.Element): Unit
+  def fitPreviewToPanel(panel: dom.Element): Unit
   def syncGridMetrics(panel: dom.Element): Unit
 end Vistyp
 
@@ -26,7 +27,7 @@ class UI(vistyp: Vistyp):
   import vistyp.*;
 
   private val defaultLibraryUrl =
-    "https://raw.githubusercontent.com/Myriad-Dreamin/vistyp/online-resources/typst-index.json"
+    "https://raw.githubusercontent.com/Myriad-Dreamin/vistyp/explore-commutative-diagrams/typst-index.json"
   private val libraryUrlVar = Var(defaultLibraryUrl)
   private val selectedResourceIdVar = Var(
     BuiltinAssets.resources.headOption.map(_.id).getOrElse(""),
@@ -61,6 +62,7 @@ class UI(vistyp: Vistyp):
       styleAttr(
         "height: 100vh",
       ),
+      onMountCallback(_ => loadAssetIndex(defaultLibraryUrl)),
       topPanel(),
       bottomPanel(),
     )
@@ -144,25 +146,25 @@ class UI(vistyp: Vistyp):
   def bottomPanel(): Element = {
     div(
       cls := "bottom-panel flex-row",
-      styleAttr("flex: 1"),
+      styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden"),
       div(
         styleAttr("flex: 0 0 35px"),
       ),
       div(
         cls := "flex-column",
-        styleAttr("flex: 1"),
+        styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0"),
         div(
-          styleAttr("margin: 5px; flex: 1"),
+          styleAttr("margin: 5px; flex: 0 0 auto"),
           definitionGroup(),
           elementGroup(),
           viewportGroup(),
         ),
         div(
           cls := "flex-row",
-          styleAttr("flex: 1"),
+          styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0"),
           div(
             cls := "flex-column",
-            styleAttr("flex: 4; height: 100vh"),
+            styleAttr("flex: 4 1 0; min-width: 0; min-height: 0"),
             defEditor(),
             mainEditor(),
           ),
@@ -340,7 +342,7 @@ class UI(vistyp: Vistyp):
   def defEditor(): Element = {
     div(
       cls := "def-editor",
-      styleAttr("flex: 5"),
+      styleAttr("flex: 5 1 0; min-height: 0"),
       child.maybe <-- monacoLoadSignal.splitOption { (monaco, _) =>
         div(
           styleAttr(
@@ -370,7 +372,7 @@ class UI(vistyp: Vistyp):
   def mainEditor(): Element = {
     div(
       cls := "main-editor",
-      styleAttr("flex: 2"),
+      styleAttr("flex: 2 1 0; min-height: 0"),
       child.maybe <-- monacoLoadSignal.splitOption { (monaco, _) =>
         div(
           styleAttr(
@@ -415,7 +417,7 @@ class UI(vistyp: Vistyp):
     div(
       cls := "preview",
       styleAttr(
-        "flex: 6",
+        "flex: 6 1 0; min-width: 0; min-height: 0",
       ),
       div(
         cls <-- gridSettingsVar.signal.map(settings =>
@@ -429,14 +431,14 @@ class UI(vistyp: Vistyp):
           dom.console.log("previewPanel mounting", ctx.thisNode.ref);
           vistyp.onPreviewMounted(ctx.thisNode.ref);
           previewContentSignal.foreach(_ =>
-            scheduleGridMetricsSync(ctx.thisNode.ref),
+            schedulePreviewLayoutSync(ctx.thisNode.ref),
           )(using ctx.owner)
           gridSettingsVar.signal.foreach(_ =>
-            scheduleGridMetricsSync(ctx.thisNode.ref),
+            schedulePreviewLayoutSync(ctx.thisNode.ref),
           )(using ctx.owner)
           ctx.thisNode.ref.addEventListener(
             "scroll",
-            _ => scheduleGridMetricsSync(ctx.thisNode.ref),
+            _ => schedulePreviewLayoutSync(ctx.thisNode.ref),
           )
         }),
         child <-- previewContentSignal.map { case (content, mapping) =>
@@ -447,8 +449,14 @@ class UI(vistyp: Vistyp):
     )
   }
 
-  private def scheduleGridMetricsSync(panel: dom.Element): Unit = {
-    dom.window.setTimeout(() => vistyp.syncGridMetrics(panel), 0)
+  private def schedulePreviewLayoutSync(panel: dom.Element): Unit = {
+    dom.window.setTimeout(
+      () => {
+        vistyp.fitPreviewToPanel(panel)
+        vistyp.syncGridMetrics(panel)
+      },
+      0,
+    )
   }
 
 end UI
