@@ -1,10 +1,8 @@
 #{
-  make-ins("A", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "A"))
-  make-ins("B", (180, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "B"))
-  make-ins("C", (0, -120), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "C"))
-  make-ins("D", (180, -120), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "D"))
-  make-ins("f", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.east", end: "B.west", label: "f"))
-  make-ins("g", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south", end: "C.north", label: "g"))
-  make-ins("h", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "B.south", end: "D.north", label: "h"))
-  make-ins("k", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "C.east", end: "D.west", label: "k"))
+  make-ins("A", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(X,x)"))
+  make-ins("B", (-160, -110), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(Y,p(x))"))
+  make-ins("C", (160, -110), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(Y,q(x))"))
+  make-ins("p", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south-west", end: "B.north-east", label: "p_*", label-offset: (-12, 10)))
+  make-ins("q", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south-east", end: "C.north-west", label: "q_*", label-offset: (12, 10)))
+  make-ins("gamma", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "B.east", end: "C.west", label: "gamma [a]", label-offset: (0, -14)))
 }
