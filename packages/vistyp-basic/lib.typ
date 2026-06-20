@@ -1,3 +1,5 @@
+#import "@preview/cetz:0.5.2"
+
 #let x-note(
   width: 120,
   height: 72,
