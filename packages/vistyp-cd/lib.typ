@@ -8,7 +8,7 @@
   stroke: none,
   node-label: "",
 ) = {
-  import cetz.draw: *
+  import cetz.draw: rect, content
 
   rect(
     (-width / 2, -height / 2),
@@ -24,10 +24,10 @@
   start: "A.east",
   end: "B.west",
   label: "f",
-  mark: (end: ">"),
+  arrow-mark: (end: ">"),
   node-label: "",
 ) = {
-  import cetz.draw: *
+  import cetz.draw: line, content, set-style
   let morphism-name = if node-label == "" {
     "morphism"
   } else {
@@ -35,7 +35,7 @@
   }
 
   set-style(mark: (fill: none, size: 14))
-  line(start, end, name: morphism-name, mark: mark)
+  line(start, end, name: morphism-name, mark: arrow-mark)
   content(morphism-name + ".centroid", label)
 }
 
@@ -43,10 +43,10 @@
   start: "f.centroid",
   end: "g.centroid",
   label: "",
-  mark: (end: ">"),
+  arrow-mark: (end: ">"),
   node-label: "",
 ) = {
-  import cetz.draw: *
+  import cetz.draw: line, content, set-style
   let cell-name = if node-label == "" {
     "cell"
   } else {
@@ -54,6 +54,6 @@
   }
 
   set-style(mark: (fill: none, size: 10))
-  line(start, end, name: cell-name, mark: mark)
+  line(start, end, name: cell-name, mark: arrow-mark)
   content(cell-name + ".centroid", label)
 }
