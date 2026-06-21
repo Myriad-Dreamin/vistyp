@@ -1,0 +1,36 @@
+.editor-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 8px 2px 0;
+}
+
+.editor-menu-group {
+    margin-left: 1em;
+    padding: 1px 3px;
+}
+
+.editor-input-box,
+.editor-code-select {
+    box-sizing: border-box;
+    height: 24px;
+}
+
+.editor-library-url {
+    width: min(38vw, 420px);
+}
+
+.editor-resource-select {
+    min-width: 220px;
+}
+
+.editor-insert-name {
+    width: 110px;
+}
+
+.editor-library-status {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

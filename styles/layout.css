@@ -1,0 +1,44 @@
+.editor-main {
+    height: 100vh;
+}
+
+.top-panel {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--vistyp-color-border);
+    background: var(--vistyp-color-panel);
+}
+
+.top-panel-toolbar {
+    align-items: center;
+    margin: 5px;
+}
+
+.app-logo {
+    height: 1rem;
+    margin: 3px;
+    margin-left: 2px;
+}
+
+.bottom-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--vistyp-color-bg);
+}
+
+.def-editor {
+    flex: 5 1 0;
+    min-height: 0;
+}
+
+.main-editor {
+    flex: 2 1 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.monaco-editor-host {
+    width: 100%;
+    height: 100%;
+}

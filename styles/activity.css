@@ -1,0 +1,63 @@
+.activity-bar {
+    box-sizing: border-box;
+    flex: 0 0 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 6px;
+    border-right: 1px solid var(--vistyp-color-border);
+    background: var(--vistyp-color-panel-muted);
+}
+
+.activity-button {
+    box-sizing: border-box;
+    width: 52px;
+    min-height: 54px;
+    padding: 6px 4px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--vistyp-color-text-muted);
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.15;
+    text-align: center;
+    cursor: pointer;
+}
+
+.activity-button:hover {
+    color: var(--vistyp-color-text-strong);
+    background: var(--vistyp-color-panel-hover);
+}
+
+.activity-button.is-active {
+    color: var(--vistyp-color-text-bright);
+    border-color: var(--vistyp-color-accent);
+    background: var(--vistyp-color-accent-surface);
+}
+
+.activity-panel-shell {
+    flex: 0 0 clamp(320px, 36vw, 520px);
+    min-width: 280px;
+    min-height: 0;
+    border-right: 1px solid var(--vistyp-color-border);
+    background: var(--vistyp-color-panel-sunken);
+}
+
+.source-code-panel,
+.package-panel {
+    height: 100%;
+    min-height: 0;
+}
+
+.activity-panel-title {
+    box-sizing: border-box;
+    flex: 0 0 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--vistyp-color-border);
+    color: var(--vistyp-color-text-strong);
+    font-size: 13px;
+    font-weight: 600;
+}

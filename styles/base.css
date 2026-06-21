@@ -1,0 +1,8 @@
+body {
+    height: 100vh;
+    overflow: hidden;
+    margin: 0;
+    font-family: var(--vistyp-font-sans);
+    color: var(--vistyp-color-text);
+    background: var(--vistyp-color-bg);
+}
