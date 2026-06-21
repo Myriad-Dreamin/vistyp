@@ -1,0 +1,10 @@
+[package]
+name = "vistyp-flowchart"
+version = "0.1.0"
+entrypoint = "lib.typ"
+authors = ["Vistyp"]
+license = "Apache-2.0"
+description = "Program flowchart resources for Vistyp."
+keywords = ["cetz", "flowchart", "program", "vistyp"]
+categories = ["visualization"]
+compiler = "0.13.1"

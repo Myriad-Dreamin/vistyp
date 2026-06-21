@@ -1,6 +1,10 @@
 body {
     height: 100vh;
     overflow: hidden;
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #d8dee9;
+    background: #101317;
 }
 
 .editor-action-group {
@@ -33,4 +37,202 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.top-panel {
+    border-bottom: 1px solid #2a2f38;
+    background: #171b21;
+}
+
+.bottom-panel {
+    background: #101317;
+}
+
+.activity-bar {
+    box-sizing: border-box;
+    flex: 0 0 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 6px;
+    border-right: 1px solid #2a2f38;
+    background: #15191f;
+}
+
+.activity-button {
+    box-sizing: border-box;
+    width: 52px;
+    min-height: 54px;
+    padding: 6px 4px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: #9aa5b1;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.15;
+    text-align: center;
+    cursor: pointer;
+}
+
+.activity-button:hover {
+    color: #f2f5f7;
+    background: #20252d;
+}
+
+.activity-button.is-active {
+    color: #f8fbff;
+    border-color: #3b82f6;
+    background: #223047;
+}
+
+.activity-panel-shell {
+    flex: 0 0 clamp(320px, 36vw, 520px);
+    min-width: 280px;
+    min-height: 0;
+    border-right: 1px solid #2a2f38;
+    background: #11151a;
+}
+
+.source-code-panel,
+.package-panel {
+    height: 100%;
+    min-height: 0;
+}
+
+.activity-panel-title {
+    box-sizing: border-box;
+    flex: 0 0 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid #2a2f38;
+    color: #f2f5f7;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.main-editor {
+    min-width: 0;
+}
+
+.package-load-row {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+    padding: 10px;
+    border-bottom: 1px solid #252b33;
+}
+
+.package-load-row .editor-library-url {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
+
+.package-status {
+    flex: 0 0 auto;
+    padding: 0 10px 8px;
+    color: #9aa5b1;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 10px 12px;
+}
+
+.package-group {
+    padding: 10px 0 12px;
+    border-top: 1px solid #252b33;
+}
+
+.package-group:first-child {
+    border-top: 0;
+}
+
+.package-group-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.package-group-name {
+    color: #f2f5f7;
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-group-meta {
+    color: #7f8b99;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-resources {
+    display: grid;
+    gap: 6px;
+}
+
+.package-resource {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    width: 100%;
+    min-height: 48px;
+    padding: 7px 9px;
+    border: 1px solid #2d3540;
+    border-radius: 6px;
+    color: #d8dee9;
+    background: #171c23;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.package-resource:hover {
+    border-color: #3b82f6;
+    background: #1d2634;
+}
+
+.package-resource-name,
+.package-resource-args,
+.package-empty {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-resource-name {
+    color: #f8fbff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.package-resource-args {
+    color: #93a4b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+}
+
+.package-empty {
+    color: #7f8b99;
+    font-size: 12px;
+}
+
+.preview {
+    background: #f7f8fb;
 }
