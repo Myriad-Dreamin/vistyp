@@ -103,6 +103,7 @@ case class AssetPackageIndexEntry(
     entrypoint: String,
     load: AssetPackageLoad,
     integrity: Option[String],
+    files: List[String],
 )
 
 case class PackageToml(name: String, version: String, entrypoint: String)
@@ -112,11 +113,14 @@ object AssetLibraryLoader:
   private val thetaIntegrity = "θintegrity"
 
   def loadIndex(indexUrl: String): js.Promise[List[LoadedAssetPackage]] =
-    val gitSource = GitSource.parse(indexUrl)
-    fetchText(indexUrl)
+    val resolvedIndexUrl = LocalIndexSource.resolve(indexUrl)
+    val gitSource = GitSource.parse(resolvedIndexUrl)
+    val localSource = LocalIndexSource(resolvedIndexUrl)
+    fetchText(resolvedIndexUrl)
       .`then`((indexText: String) => {
         val entries = parseIndex(indexText)
-        val loaders = entries.map(entry => () => loadPackage(entry, gitSource))
+        val loaders =
+          entries.map(entry => () => loadPackage(entry, gitSource, localSource))
         sequence(loaders, List.empty[LoadedAssetPackage])
       })
       .asInstanceOf[js.Promise[List[LoadedAssetPackage]]]
@@ -124,6 +128,7 @@ object AssetLibraryLoader:
   private def loadPackage(
       entry: AssetPackageIndexEntry,
       gitSource: Option[GitSource],
+      localSource: LocalIndexSource,
   ): js.Promise[Option[LoadedAssetPackage]] =
     entry.load match
       case AssetPackageLoad.Universe =>
@@ -150,9 +155,11 @@ object AssetLibraryLoader:
               )
               .asInstanceOf[js.Promise[Option[LoadedAssetPackage]]]
           case None =>
-            failed(
-              s"${entry.name}@${entry.version}: relative θload requires a recognized Git index source",
-            )
+            fetchLocalPackageFiles(entry, path, localSource)
+              .`then`((files: Map[String, String]) =>
+                Some(materializePackage(entry, files)),
+              )
+              .asInstanceOf[js.Promise[Option[LoadedAssetPackage]]]
 
   private def fetchPackageArchive(
       url: String,
@@ -206,6 +213,7 @@ object AssetLibraryLoader:
           entrypoint = requiredString(entry, "entrypoint", index),
           load = load,
           integrity = dynString(entry, thetaIntegrity),
+          files = dynStringArray(entry, "files", index),
         )
       }
 
@@ -245,6 +253,28 @@ object AssetLibraryLoader:
     val value = entry.selectDynamic(key)
     if js.isUndefined(value) || value == null then None
     else Some(value.asInstanceOf[String])
+
+  private def dynStringArray(
+      entry: js.Dynamic,
+      key: String,
+      index: Int,
+  ): List[String] =
+    val value = entry.selectDynamic(key)
+    if js.isUndefined(value) || value == null then Nil
+    else if js.Array.isArray(value) then
+      value
+        .asInstanceOf[js.Array[js.Any]]
+        .toList
+        .zipWithIndex
+        .map { case (item, itemIndex) =>
+          if js.typeOf(item) != "string" then
+            throw new Exception(
+              s"Package index entry #$index '$key' item #$itemIndex must be a string",
+            )
+          item.asInstanceOf[String]
+        }
+    else
+      throw new Exception(s"Package index entry #$index '$key' must be an array")
 
   private def parseIntegrity(value: String): String =
     val prefix = "sha256:"
@@ -447,6 +477,24 @@ object AssetLibraryLoader:
       packagePath: String,
   ): js.Promise[Map[String, String]] =
     fetchGitPath(source, normalizePath(packagePath), normalizePath(packagePath))
+
+  private def fetchLocalPackageFiles(
+      entry: AssetPackageIndexEntry,
+      path: String,
+      source: LocalIndexSource,
+  ): js.Promise[Map[String, String]] =
+    val rootUrl = withTrailingSlash(source.resolve(path))
+    val files =
+      (entry.files ++ List("typst.toml", entry.entrypoint)).map(normalizePath).distinct
+    val loaders = files.map { file =>
+      () =>
+        fetchText(new dom.URL(file, rootUrl).href)
+          .`then`((content: String) => Map(file -> content))
+    }
+    sequenceMaps(loaders, Map.empty[String, String])
+
+  private def withTrailingSlash(value: String): String =
+    if value.endsWith("/") then value else s"$value/"
 
   private def fetchGitPath(
       source: GitSource,
@@ -804,3 +852,11 @@ object GitSource:
       case owner :: repo :: "blob" :: revision :: rest if rest.nonEmpty =>
         Some(GitSource(owner, repo, revision, rest.mkString("/")))
       case _ => None
+
+case class LocalIndexSource(indexUrl: String):
+  def resolve(path: String): String =
+    new dom.URL(path, new dom.URL(".", indexUrl).href).href
+
+object LocalIndexSource:
+  def resolve(indexUrl: String): String =
+    new dom.URL(indexUrl, dom.window.location.href).href

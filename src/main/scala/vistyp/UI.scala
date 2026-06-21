@@ -7,6 +7,9 @@ import org.scalajs.dom
 import com.raquo.laminar.api.L.{*, given}
 import com.raquo.laminar.DomApi
 
+private enum ActivityView:
+  case SourceCode, Package
+
 trait Vistyp:
   val previewContentSignal: Signal[(String, Map[String, String])]
   val programContentVar: Var[String]
@@ -19,16 +22,16 @@ trait Vistyp:
   def insertResource(resourceId: String, name: String): Unit
 
   def onPreviewMounted(panel: dom.Element): Unit
-  def fitPreviewToPanel(panel: dom.Element): Unit
+  def applyPreviewZoom(panel: dom.Element): Unit
   def syncGridMetrics(panel: dom.Element): Unit
 end Vistyp
 
 class UI(vistyp: Vistyp):
   import vistyp.*;
 
-  private val defaultLibraryUrl =
-    "https://raw.githubusercontent.com/Myriad-Dreamin/vistyp/explore-commutative-diagrams/typst-index.json"
+  private val defaultLibraryUrl = "index.json"
   private val libraryUrlVar = Var(defaultLibraryUrl)
+  private val activeActivityVar = Var(ActivityView.SourceCode)
   private val selectedResourceIdVar = Var(
     BuiltinAssets.resources.headOption.map(_.id).getOrElse(""),
   )
@@ -62,7 +65,10 @@ class UI(vistyp: Vistyp):
       styleAttr(
         "height: 100vh",
       ),
-      onMountCallback(_ => loadAssetIndex(defaultLibraryUrl)),
+      onMountCallback(_ => {
+        updateDefinition(builtinDefinitions)
+        loadAssetIndex(defaultLibraryUrl)
+      }),
       topPanel(),
       bottomPanel(),
     )
@@ -147,30 +153,128 @@ class UI(vistyp: Vistyp):
     div(
       cls := "bottom-panel flex-row",
       styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden"),
+      activityBar(),
       div(
-        styleAttr("flex: 0 0 35px"),
+        cls := "activity-panel-shell",
+        child <-- activeActivityVar.signal.map {
+          case ActivityView.SourceCode => sourceCodePanel()
+          case ActivityView.Package    => packagePanel()
+        },
+      ),
+      previewPanel(),
+    )
+  }
+
+  def activityBar(): Element = {
+    div(
+      cls := "activity-bar",
+      activityButton(ActivityView.SourceCode, "Source Code"),
+      activityButton(ActivityView.Package, "Package"),
+    )
+  }
+
+  private def activityButton(view: ActivityView, label: String): Element = {
+    button(
+      cls <-- activeActivityVar.signal.map(active =>
+        if active == view then "activity-button is-active" else "activity-button",
+      ),
+      title := label,
+      label,
+      onClick.mapTo(view) --> activeActivityVar,
+    )
+  }
+
+  def sourceCodePanel(): Element = {
+    div(
+      cls := "source-code-panel flex-column",
+      div(cls := "activity-panel-title", "Source Code"),
+      mainEditor(),
+    )
+  }
+
+  def packagePanel(): Element = {
+    div(
+      cls := "package-panel flex-column",
+      div(cls := "activity-panel-title", "Package"),
+      div(
+        cls := "package-load-row",
+        input(
+          cls := "editor-input-box editor-library-url",
+          typ := "text",
+          placeholder := "index.json URL",
+          value <-- libraryUrlVar.signal,
+          onInput.mapToValue --> libraryUrlVar,
+        ),
+        button(
+          cls := "editor-input-button",
+          "Load",
+          onClick.mapTo(()) --> { _ =>
+            loadAssetIndex(libraryUrlVar.now())
+          },
+        ),
       ),
       div(
-        cls := "flex-column",
-        styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0"),
-        div(
-          styleAttr("margin: 5px; flex: 0 0 auto"),
-          definitionGroup(),
-          elementGroup(),
-          viewportGroup(),
-        ),
-        div(
-          cls := "flex-row",
-          styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0"),
-          div(
-            cls := "flex-column",
-            styleAttr("flex: 4 1 0; min-width: 0; min-height: 0"),
-            defEditor(),
-            mainEditor(),
-          ),
-          previewPanel(),
-        ),
+        cls := "package-status",
+        child.text <-- assetLibraryStateSignal.map(packageStatusText),
       ),
+      div(
+        cls := "package-list",
+        children <-- assetLibraryStateSignal.map { state =>
+          builtinPackageGroup() :: state.packages.map(packageGroup)
+        },
+      ),
+    )
+  }
+
+  private def packageStatusText(state: AssetLibraryState): String =
+    if state.loading then "loading"
+    else
+      state.error.getOrElse {
+        if state.packages.isEmpty then "builtin"
+        else s"${state.packages.length} package(s)"
+      }
+
+  private def builtinPackageGroup(): Element =
+    packageResourceGroup("Builtin", "local", BuiltinAssets.resources)
+
+  private def packageGroup(pkg: LoadedAssetPackage): Element =
+    packageResourceGroup(pkg.key.name, pkg.key.id, pkg.resources)
+
+  private def packageResourceGroup(
+      name: String,
+      meta: String,
+      resources: List[AssetResource],
+  ): Element = {
+    div(
+      cls := "package-group",
+      div(
+        cls := "package-group-header",
+        div(cls := "package-group-name", name),
+        div(cls := "package-group-meta", meta),
+      ),
+      div(
+        cls := "package-resources",
+        children <-- Val {
+          if resources.isEmpty then List(div(cls := "package-empty", "No elements"))
+          else resources.map(resourceButton)
+        },
+      ),
+    )
+  }
+
+  private def resourceButton(resource: AssetResource): Element = {
+    val args =
+      if resource.args.isEmpty then "()"
+      else resource.args.map(_.name).mkString("(", ", ", ")")
+    button(
+      cls := "package-resource",
+      title := resource.id,
+      onClick.mapTo(()) --> { _ =>
+        selectedResourceIdVar.set(resource.id)
+        insertResource(resource.id, "")
+      },
+      span(cls := "package-resource-name", resource.functionName),
+      span(cls := "package-resource-args", args),
     )
   }
 
@@ -395,16 +499,20 @@ class UI(vistyp: Vistyp):
               .getModel()
               .onDidChangeContent((e: MonacoModelContentChange) => {
                 if (!e.isFlush) {
-                  updateDiagram(mainEditor.getValue());
+                  val content = mainEditor.getValue()
+                  programContentVar.set(content)
+                  updateDiagram(content)
                 }
               })
 
-            programContentVar.signal
-              .foreach(content => {
-                mainEditor.setValue(content);
-                updateDiagram(content);
-              })(using ctx.owner)
-            updateDiagram(programContentVar.now());
+            def syncEditor(content: String): Unit = {
+              if mainEditor.getValue() != content then
+                mainEditor.setValue(content)
+                updateDiagram(content)
+            }
+
+            programContentVar.signal.foreach(syncEditor)(using ctx.owner)
+            syncEditor(programContentVar.now())
 
           }),
         )
@@ -452,7 +560,7 @@ class UI(vistyp: Vistyp):
   private def schedulePreviewLayoutSync(panel: dom.Element): Unit = {
     dom.window.setTimeout(
       () => {
-        vistyp.fitPreviewToPanel(panel)
+        vistyp.applyPreviewZoom(panel)
         vistyp.syncGridMetrics(panel)
       },
       0,
