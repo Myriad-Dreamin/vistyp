@@ -1,0 +1,6 @@
+.preview {
+    flex: 6 1 0;
+    min-width: 0;
+    min-height: 0;
+    background: var(--vistyp-preview-bg);
+}

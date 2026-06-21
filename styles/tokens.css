@@ -1,0 +1,26 @@
+:root {
+    --vistyp-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --vistyp-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --vistyp-color-bg: #101317;
+    --vistyp-color-panel: #171b21;
+    --vistyp-color-panel-muted: #15191f;
+    --vistyp-color-panel-sunken: #11151a;
+    --vistyp-color-panel-hover: #20252d;
+    --vistyp-color-surface: #171c23;
+    --vistyp-color-surface-hover: #1d2634;
+    --vistyp-color-border: #2a2f38;
+    --vistyp-color-border-muted: #252b33;
+    --vistyp-color-border-control: #2d3540;
+    --vistyp-color-accent: #3b82f6;
+    --vistyp-color-accent-surface: #223047;
+
+    --vistyp-color-text: #d8dee9;
+    --vistyp-color-text-strong: #f2f5f7;
+    --vistyp-color-text-bright: #f8fbff;
+    --vistyp-color-text-muted: #9aa5b1;
+    --vistyp-color-text-subtle: #7f8b99;
+    --vistyp-color-text-code: #93a4b8;
+
+    --vistyp-preview-bg: #f7f8fb;
+}

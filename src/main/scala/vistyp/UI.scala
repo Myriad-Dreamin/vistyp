@@ -62,9 +62,6 @@ class UI(vistyp: Vistyp):
   def mainElement(): Element = {
     div(
       cls := "editor-main flex-column",
-      styleAttr(
-        "height: 100vh",
-      ),
       onMountCallback(_ => {
         updateDefinition(builtinDefinitions)
         loadAssetIndex(defaultLibraryUrl)
@@ -77,25 +74,14 @@ class UI(vistyp: Vistyp):
   def topPanel(): Element = {
     div(
       cls := "top-panel",
-      styleAttr(
-        "flex: 0 0 auto",
-      ),
       div(
-        cls := "flex-row",
-        styleAttr(
-          "margin: 5px; align-items: center",
-        ),
+        cls := "top-panel-toolbar flex-row",
         img(
+          cls := "app-logo",
           src := "favicon.svg",
-          styleAttr(
-            "height: 1rem; margin: 3px; margin-left: 2px",
-          ),
         ),
         div(
           cls := "editor-menu-group",
-          styleAttr(
-            "margin-left: 1em; padding: 1px 3px",
-          ),
           a(
             cls := "editor-menu export-svg",
             "SVG",
@@ -152,7 +138,6 @@ class UI(vistyp: Vistyp):
   def bottomPanel(): Element = {
     div(
       cls := "bottom-panel flex-row",
-      styleAttr("flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden"),
       activityBar(),
       div(
         cls := "activity-panel-shell",
@@ -446,12 +431,9 @@ class UI(vistyp: Vistyp):
   def defEditor(): Element = {
     div(
       cls := "def-editor",
-      styleAttr("flex: 5 1 0; min-height: 0"),
       child.maybe <-- monacoLoadSignal.splitOption { (monaco, _) =>
         div(
-          styleAttr(
-            "width: 100%; height: 100%",
-          ),
+          cls := "monaco-editor-host",
           onMountCallback(ctx => {
             dom.console.log("defEditor mounting", ctx.thisNode.ref);
 
@@ -476,12 +458,9 @@ class UI(vistyp: Vistyp):
   def mainEditor(): Element = {
     div(
       cls := "main-editor",
-      styleAttr("flex: 2 1 0; min-height: 0"),
       child.maybe <-- monacoLoadSignal.splitOption { (monaco, _) =>
         div(
-          styleAttr(
-            "width: 100%; height: 100%",
-          ),
+          cls := "monaco-editor-host",
           onMountCallback(ctx => {
             dom.console.log("mainEditor mounting", ctx.thisNode.ref);
             val mainEditor = monaco.editor.create(
@@ -524,9 +503,6 @@ class UI(vistyp: Vistyp):
     import instrument.processSvg
     div(
       cls := "preview",
-      styleAttr(
-        "flex: 6 1 0; min-width: 0; min-height: 0",
-      ),
       div(
         cls <-- gridSettingsVar.signal.map(settings =>
           if Grid.active(settings) then "preview-panel preview-panel-grid"

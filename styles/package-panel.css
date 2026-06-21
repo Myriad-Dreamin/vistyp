@@ -1,0 +1,116 @@
+.package-load-row {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    display: flex;
+    gap: 6px;
+    padding: 10px;
+    border-bottom: 1px solid var(--vistyp-color-border-muted);
+}
+
+.package-load-row .editor-library-url {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
+
+.package-status {
+    flex: 0 0 auto;
+    padding: 0 10px 8px;
+    color: var(--vistyp-color-text-muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 10px 12px;
+}
+
+.package-group {
+    padding: 10px 0 12px;
+    border-top: 1px solid var(--vistyp-color-border-muted);
+}
+
+.package-group:first-child {
+    border-top: 0;
+}
+
+.package-group-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.package-group-name {
+    color: var(--vistyp-color-text-strong);
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-group-meta {
+    color: var(--vistyp-color-text-subtle);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-resources {
+    display: grid;
+    gap: 6px;
+}
+
+.package-resource {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    width: 100%;
+    min-height: 48px;
+    padding: 7px 9px;
+    border: 1px solid var(--vistyp-color-border-control);
+    border-radius: 6px;
+    color: var(--vistyp-color-text);
+    background: var(--vistyp-color-surface);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.package-resource:hover {
+    border-color: var(--vistyp-color-accent);
+    background: var(--vistyp-color-surface-hover);
+}
+
+.package-resource-name,
+.package-resource-args,
+.package-empty {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.package-resource-name {
+    color: var(--vistyp-color-text-bright);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.package-resource-args {
+    color: var(--vistyp-color-text-code);
+    font-family: var(--vistyp-font-mono);
+    font-size: 11px;
+}
+
+.package-empty {
+    color: var(--vistyp-color-text-subtle);
+    font-size: 12px;
+}
