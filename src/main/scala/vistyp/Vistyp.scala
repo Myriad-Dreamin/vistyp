@@ -277,6 +277,9 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   private def allAssetResources: List[AssetResource] =
     BuiltinAssets.resources ++ loadedAssetPackages.flatMap(_.resources)
 
+  private def resourceById(resourceId: String): Option[AssetResource] =
+    allAssetResources.find(_.id == resourceId)
+
   def loadAssetIndex(url: String): Unit = {
     val trimmedUrl = url.trim
     if trimmedUrl.isEmpty then
@@ -309,7 +312,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   }
 
   def insertResource(resourceId: String, name: String): Unit = {
-    val resource = allAssetResources.find(_.id == resourceId) match {
+    val resource = resourceById(resourceId) match {
       case Some(resource) => resource
       case None =>
         assetLibraryStateVar.update(
@@ -330,16 +333,212 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     updateDiagram(content)
   }
 
-  def updateProgram() = {
-    var content = instances
-      .map { ins =>
-        val args = ins.extraArgs.iterator.flatten.map(_.repr).mkString(", ")
-        s"""make-ins("${ins.name}", (${ins.pos.get._1}, ${ins.pos.get._2}), "${ins.ty}", (${args}))"""
-      }
-      .mkString("#{", "\n  ", "}")
+  def elementIdAt(target: dom.EventTarget): Option[String] =
+    try
+      findTaggedTypstElement(target.asInstanceOf[dom.Element]).map(getTypstElementId)
+    catch case _: Throwable => None
 
-    programContentVar.update(_ => content)
+  def deleteElement(elementId: String): Unit = {
+    val nextInstances = instances.filterNot(_.name == elementId)
+    if nextInstances.length == instances.length then return
+
+    selectedElem = None
+    dragStartPos = None
+    transform = None
+    instances = nextInstances
+    updateProgram()
   }
+
+  def elementProperties(elementId: String): Option[ElementPropertyState] =
+    instances.find(_.name == elementId).map { ins =>
+      val resource = resourceById(ins.ty)
+      val resourceArgs = resource.map(_.args).getOrElse(Nil)
+      val resourceArgNames = resourceArgs.map(_.name).toSet
+      val extraArgs = ins.extraArgs.getOrElse(Nil)
+      val keyedArgs = extraArgs.collect {
+        case KeyedArg(Ident(name), value) => name -> value
+      }.toMap
+      val fields = resourceArgs.map { arg =>
+        propertyField(arg, keyedArgs.get(arg.name))
+      }
+      val rawExtraArgs = extraArgs
+        .filterNot(arg => keyedArgName(arg).exists(resourceArgNames.contains))
+        .map(_.repr)
+        .mkString(", ")
+      val pos = ins.pos.getOrElse(0d -> 0d)
+
+      ElementPropertyState(
+        elementId = ins.name,
+        resourceId = ins.ty,
+        resourceLabel = resource.map(resourceDisplayLabel).getOrElse(ins.ty),
+        sourceCode = elementSource(ins),
+        positionX = Grid.clean(pos._1).toString,
+        positionY = Grid.clean(pos._2).toString,
+        fields = fields,
+        extraArgs = rawExtraArgs,
+        error = None,
+      )
+    }
+
+  def saveElementProperties(
+      state: ElementPropertyState,
+  ): Either[String, ElementPropertyState] = {
+    val position = parsePosition(state)
+    val knownArgs = parsePropertyFields(state.fields)
+    val extraArgs = parseExtraArgs(state.extraArgs)
+
+    (position, knownArgs, extraArgs) match
+      case (Left(error), _, _) => Left(error)
+      case (_, Left(error), _) => Left(error)
+      case (_, _, Left(error)) => Left(error)
+      case (Right(pos), Right(known), Right(extra)) =>
+        instances.find(_.name == state.elementId) match
+          case None => Left("Element no longer exists")
+          case Some(_) =>
+            val args = known ++ extra
+            duplicatePropertyName(args) match
+              case Some(name) => Left(s"Duplicate property: $name")
+              case None =>
+                instances = instances.map { ins =>
+                  if ins.name == state.elementId then
+                    ins.copy(pos = Some(pos), extraArgs = Some(args), initPos = None)
+                  else ins
+                }
+                updateProgram()
+                elementProperties(state.elementId).toRight("Element no longer exists")
+  }
+
+  def saveElementSource(
+      elementId: String,
+      sourceCode: String,
+  ): Either[String, ElementPropertyState] =
+    parseElementSource(sourceCode).flatMap { nextInstance =>
+      if !instances.exists(_.name == elementId) then Left("Element no longer exists")
+      else if nextInstance.name != elementId && instances.exists(_.name == nextInstance.name)
+      then Left(s"Duplicate element name: ${nextInstance.name}")
+      else
+        instances = instances.map { ins =>
+          if ins.name == elementId then nextInstance else ins
+        }
+        updateProgram()
+        elementProperties(nextInstance.name).toRight("Element no longer exists")
+    }
+
+  def updateProgram() = {
+    val body = instances.map { ins =>
+      instanceSource(ins)
+    }
+    val content =
+      if body.isEmpty then "#{\n}"
+      else body.mkString("#{", "\n  ", "}")
+
+    programContentVar.set(content)
+    updatePreview()
+  }
+
+  private def resourceDisplayLabel(resource: AssetResource): String =
+    s"${resource.functionName} · ${resource.packageLabel}"
+
+  private def instanceSource(ins: Instance): String =
+    val pos = ins.pos.getOrElse(0d -> 0d)
+    val args = ins.extraArgs.iterator.flatten.map(_.repr).mkString(", ")
+    s"""make-ins("${escapeStr(ins.name)}", (${pos._1}, ${pos._2}), "${escapeStr(ins.ty)}", ($args))"""
+
+  private def elementSource(ins: Instance): String =
+    s"#${instanceSource(ins)}"
+
+  private def parseElementSource(sourceCode: String): Either[String, Instance] =
+    try
+      val expression = sourceCode.trim.stripPrefix("#").trim
+      constructInstance(parseCodeExpression(expression)) match
+        case Some(instance) => Right(instance)
+        case None          => Left("Element source must be a make-ins(...) call")
+    catch case error: Throwable => Left(s"Invalid element source: ${error.getMessage}")
+
+  private def propertyField(
+      arg: AssetArg,
+      value: Option[syntax.Node],
+  ): ElementPropertyField =
+    val (displayValue, textLiteral) = propertyDisplayValue(arg, value)
+    ElementPropertyField(
+      name = arg.name,
+      value = displayValue,
+      kind = arg.kind,
+      textLiteral = textLiteral,
+    )
+
+  private def propertyDisplayValue(
+      arg: AssetArg,
+      value: Option[syntax.Node],
+  ): (String, Boolean) =
+    value match
+      case Some(StrLit(value)) if arg.kind == "text" => value -> true
+      case Some(node)                                => node.repr -> false
+      case None =>
+        try
+          parseCodeExpression(arg.defaultValue) match
+            case StrLit(value) if arg.kind == "text" => value -> true
+            case node                                => node.repr -> false
+        catch case _: Throwable => arg.defaultValue -> false
+
+  private def parsePosition(
+      state: ElementPropertyState,
+  ): Either[String, (Double, Double)] =
+    (state.positionX.trim.toDoubleOption, state.positionY.trim.toDoubleOption) match
+      case (Some(x), Some(y)) => Right(Grid.clean(x) -> Grid.clean(y))
+      case (None, _)         => Left("Invalid X position")
+      case (_, None)         => Left("Invalid Y position")
+
+  private def parsePropertyFields(
+      fields: List[ElementPropertyField],
+  ): Either[String, List[syntax.Node]] =
+    fields.foldLeft[Either[String, List[syntax.Node]]](Right(Nil)) {
+      case (Left(error), _) => Left(error)
+      case (Right(args), field) =>
+        parsePropertyField(field).map(arg => args :+ arg)
+    }
+
+  private def parsePropertyField(
+      field: ElementPropertyField,
+  ): Either[String, syntax.Node] =
+    val value = field.value.trim
+    if field.kind == "text" && field.textLiteral then
+      Right(KeyedArg(Ident(field.name), StrLit(field.value)))
+    else if value.isEmpty then Left(s"${field.name} is empty")
+    else
+      parsePropertyValue(field.name, value).map { node =>
+        KeyedArg(Ident(field.name), node)
+      }
+
+  private def parseExtraArgs(raw: String): Either[String, List[syntax.Node]] =
+    val trimmed = raw.trim
+    if trimmed.isEmpty then Right(Nil)
+    else
+      val source =
+        if trimmed.startsWith("(") && trimmed.endsWith(")") then trimmed
+        else s"($trimmed)"
+      parsePropertyValue("extra arguments", source).flatMap {
+        case ArgsLit(values) => Right(values)
+        case _ => Left("Extra arguments must be a comma-separated argument list")
+      }
+
+  private def parsePropertyValue(
+      label: String,
+      source: String,
+  ): Either[String, syntax.Node] =
+    try Right(parseCodeExpression(source))
+    catch case error: Throwable => Left(s"Invalid $label: ${error.getMessage}")
+
+  private def duplicatePropertyName(args: List[syntax.Node]): Option[String] =
+    args
+      .flatMap(keyedArgName)
+      .groupBy(identity)
+      .collectFirst { case (name, values) if values.length > 1 => name }
+
+  private def keyedArgName(arg: syntax.Node): Option[String] =
+    arg match
+      case KeyedArg(Ident(name), _) => Some(name)
+      case _                        => None
 
   private def appendMakeIns(content: String, item: String): String = {
     val trimmed = content.trim
@@ -602,7 +801,9 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   var svgElem: Option[dom.SVGElement] = None
   var transform = Option.empty[dom.SVGTransform]
   var dragStartPos: Option[(Double, Double)] = None
+  var dragMoved: Boolean = false
   def startDrag(panel: dom.Element, evt: dom.MouseEvent): Unit = {
+    if evt.button != 0 then return
 
     val targetOpt =
       findTaggedTypstElement(evt.target.asInstanceOf[dom.Element]);
@@ -649,13 +850,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     println(s"find typstId $typstId in $instances")
     dragStartPos =
       instances.find(_.name == typstId).flatMap(_.pos).orElse(Some(0d -> 0d))
-    instances = instances.map { ins =>
-      if (ins.name == typstId) {
-        ins.copy(initPos = dragStartPos)
-      } else {
-        ins
-      }
-    }
+    dragMoved = false
   }
 
   def drag(panel: dom.Element, evt: dom.MouseEvent): Unit = {
@@ -668,13 +863,16 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     val coord = getMousePosition(evt)
     val rawX = coord._1 - offset._1
     val rawY = coord._2 - offset._2
+    if !dragMoved && math.abs(rawX) < 0.5 && math.abs(rawY) < 0.5 then return
+
+    dragMoved = true
     val typstId = getTypstElementId(selectedElement)
     val (x, y) = snappedDragOffset(rawX, rawY, evt.altKey, typstId)
     transform.get.setTranslate(x, y)
     println(s"find typstId $typstId in $instances")
     instances = instances.map { ins =>
       if (ins.name == typstId) {
-        ins.copy(pos = Some(x -> y))
+        ins.copy(pos = Some(x -> y), initPos = dragStartPos)
       } else {
         ins
       }
@@ -688,7 +886,10 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       case None               => return
     }
     selectedElem = None
+    val shouldCommitDrag = dragMoved
+    dragMoved = false
     dragStartPos = None
+    if !shouldCommitDrag then return
 
     val typstId = getTypstElementId(selectedElement)
     println(s"find typstId $typstId in $instances")
@@ -799,4 +1000,23 @@ case class Instance(
     val ty: String,
     val extraArgs: Option[List[syntax.Node]],
     val initPos: Option[(Double, Double)] = None,
+)
+
+case class ElementPropertyField(
+    name: String,
+    value: String,
+    kind: String,
+    textLiteral: Boolean = false,
+)
+
+case class ElementPropertyState(
+    elementId: String,
+    resourceId: String,
+    resourceLabel: String,
+    sourceCode: String,
+    positionX: String,
+    positionY: String,
+    fields: List[ElementPropertyField],
+    extraArgs: String,
+    error: Option[String] = None,
 )

@@ -22,10 +22,22 @@ def parseCode(src: String): syntax.MarkupBlock = {
   }
 }
 
+def parseCodeExpression(src: String): syntax.Node = {
+  fastparse.parse(src, Parser.expressionRoot(using _)) match {
+    case Parsed.Success(ast, _) => ast
+    case Parsed.Failure(_, index, extra) =>
+      println(extra.trace().longAggregateMsg)
+      println(src.slice(index, index + 40))
+      throw new Exception("Parsing expression failed")
+  }
+}
+
 object Parser {
   // Entry point
   def markupRoot[$: P]: P[MarkupBlock] =
     P((!End ~ markupExpr).rep.map(_.toList) ~ End).map(MarkupBlock.apply).m
+  def expressionRoot[$: P]: P[Node] =
+    P(termU ~ End)
   def markupMode[$: P]: P[MarkupBlock] =
     P((!End ~ markupExpr).rep.map(_.toList)).map(MarkupBlock.apply).m
   def codeMode[$: P]: P[Block] =

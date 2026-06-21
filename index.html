@@ -26,6 +26,20 @@
           monaco.editor.defineTheme("tokyo-night", window.tokyoNightTheme());
           // Register a new language
           monaco.languages.register({ id: "typst", extensions: [".typ"] });
+          monaco.languages.setMonarchTokensProvider("typst", {
+            tokenizer: {
+              root: [
+                [/\/\/.*$/, "comment"],
+                [/"(?:\\.|[^"\\])*"/, "string"],
+                [/\b(?:true|false|none|auto|let|import|as|if|else|for|in)\b/, "keyword"],
+                [/[+-]?(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)/, "number"],
+                [/[A-Za-z_][\w-]*(?=\s*:)/, "attribute.name"],
+                [/[A-Za-z_][\w-]*(?=\s*\()/, "type.identifier"],
+                [/[A-Za-z_][\w-]*/, "identifier"],
+                [/[#\[\](){},.:]/, "delimiter"],
+              ],
+            },
+          });
           monaco.languages.registerDocumentSemanticTokensProvider(
             "typst",
             await $typst$semanticTokensProvider
