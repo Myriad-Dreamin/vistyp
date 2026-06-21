@@ -37,6 +37,11 @@ object VistypImpl extends Vistyp:
   var defMap: Map[String, Def] = Map.empty
   var instances: List[Instance] = List()
   private var previewResizeObserver: Option[dom.ResizeObserver] = None
+  private val previewZoomLevels =
+    Vector(0.1d, 0.25d, 0.5d, 0.75d, 1d, 1.25d, 1.5d, 2d, 3d, 4d)
+  private var previewZoomIndex: Int = previewZoomLevels.indexOf(1d)
+
+  private def previewZoom: Double = previewZoomLevels(previewZoomIndex)
 
   def tagMapping = instances.iterator.zipWithIndex.map {
     case (ins, idx) => {
@@ -245,12 +250,18 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   }
 
   val sampleDiagram = """#{
-  make-ins("A", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(X,x)"))
-  make-ins("B", (-160, -110), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(Y,p(x))"))
-  make-ins("C", (160, -110), "@vistyp/vistyp-cd:0.1.0/x-cd-object", (label: "pi_1(Y,q(x))"))
-  make-ins("p", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south-west", end: "B.north-east", label: "p_*", label-offset: (-12, 10)))
-  make-ins("q", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "A.south-east", end: "C.north-west", label: "q_*", label-offset: (12, 10)))
-  make-ins("gamma", (0, 0), "@vistyp/vistyp-cd:0.1.0/x-cd-arrow", (start: "B.east", end: "C.west", label: "gamma [a]", label-offset: (0, -14)))
+  make-ins("start", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-start", (label: "Start"))
+  make-ins("read", (0, -92), "@vistyp/vistyp-flowchart:0.1.0/x-flow-io", (label: "Read n"))
+  make-ins("check", (0, -196), "@vistyp/vistyp-flowchart:0.1.0/x-flow-decision", (label: "n <= 1?"))
+  make-ins("return-base", (-170, -318), "@vistyp/vistyp-flowchart:0.1.0/x-flow-process", (label: "Return 1"))
+  make-ins("multiply", (170, -318), "@vistyp/vistyp-flowchart:0.1.0/x-flow-process", (label: "n * fact(n - 1)"))
+  make-ins("end", (0, -430), "@vistyp/vistyp-flowchart:0.1.0/x-flow-start", (label: "End"))
+  make-ins("a-start-read", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-arrow", (start: "start.south", end: "read.north"))
+  make-ins("a-read-check", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-arrow", (start: "read.south", end: "check.north"))
+  make-ins("a-check-base", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-arrow", (start: "check.west", end: "return-base.north", label: "yes", label-offset: (-18, 0)))
+  make-ins("a-check-mul", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-arrow", (start: "check.east", end: "multiply.north", label: "no", label-offset: (18, 0)))
+  make-ins("a-base-end", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-arrow", (start: "return-base.south", end: "end.west"))
+  make-ins("a-mul-end", (0, 0), "@vistyp/vistyp-flowchart:0.1.0/x-flow-arrow", (start: "multiply.south", end: "end.east"))
 }
 """
 
@@ -314,7 +325,9 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       .mkString(", ")
     val item =
       s"""make-ins("${escapeStr(nodeName)}", (0, 0), "${escapeStr(resource.id)}", ($args))"""
-    programContentVar.update(content => appendMakeIns(content, item))
+    val content = appendMakeIns(programContentVar.now(), item)
+    programContentVar.set(content)
+    updateDiagram(content)
   }
 
   def updateProgram() = {
@@ -364,6 +377,10 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       "mouseleave",
       e => this.endDrag(panel, e.asInstanceOf[dom.MouseEvent]),
     );
+    panel.addEventListener(
+      "wheel",
+      e => this.zoomPreview(panel, e.asInstanceOf[dom.WheelEvent]),
+    );
     // panel.addEventListener(
     //   "contextmenu",
     //   e => this.doToggleContextMenu(panel, e),
@@ -372,12 +389,12 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
   private def schedulePreviewLayoutSync(panel: dom.Element): Unit = {
     dom.window.requestAnimationFrame { _ =>
-      fitPreviewToPanel(panel)
+      applyPreviewZoom(panel)
       syncGridMetrics(panel)
     }
   }
 
-  def fitPreviewToPanel(panel: dom.Element): Unit = {
+  def applyPreviewZoom(panel: dom.Element): Unit = {
     val svg = panel.querySelector("svg").asInstanceOf[dom.SVGSVGElement | Null]
     if (svg == null) {
       return
@@ -385,15 +402,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     svgNaturalSize(svg) match {
       case Some((naturalWidth, naturalHeight)) =>
-        val panelRect = panel.getBoundingClientRect()
-        val computedStyle = dom.window.getComputedStyle(panel)
-        val horizontalPadding =
-          cssPx(computedStyle.paddingLeft) + cssPx(computedStyle.paddingRight)
-        val verticalPadding =
-          cssPx(computedStyle.paddingTop) + cssPx(computedStyle.paddingBottom)
-        val availableWidth = math.max(1d, panelRect.width - horizontalPadding)
-        val availableHeight = math.max(1d, panelRect.height - verticalPadding)
-        val scale = math.min(availableWidth / naturalWidth, availableHeight / naturalHeight)
+        val scale = previewZoom
 
         if (scale <= 0 || scale.isNaN || scale.isInfinity) {
           return
@@ -408,6 +417,46 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     }
   }
 
+  private def zoomPreview(panel: dom.Element, evt: dom.WheelEvent): Unit = {
+    if (!evt.ctrlKey) {
+      return
+    }
+
+    evt.preventDefault()
+    if (evt.deltaY == 0) {
+      return
+    }
+
+    val nextIndex =
+      if evt.deltaY < 0 then previewZoomIndex + 1 else previewZoomIndex - 1
+    val clampedIndex = nextIndex.max(0).min(previewZoomLevels.length - 1)
+    if (clampedIndex == previewZoomIndex) {
+      return
+    }
+
+    val oldZoom = previewZoom
+    val panelRect = panel.getBoundingClientRect()
+    val panelDynamic = panel.asInstanceOf[js.Dynamic]
+    val pointerX = evt.clientX - panelRect.left
+    val pointerY = evt.clientY - panelRect.top
+    val scrollLeft = panelDynamic.scrollLeft.asInstanceOf[Double]
+    val scrollTop = panelDynamic.scrollTop.asInstanceOf[Double]
+    val contentX = scrollLeft + pointerX
+    val contentY = scrollTop + pointerY
+
+    previewZoomIndex = clampedIndex
+    applyPreviewZoom(panel)
+
+    val ratio = previewZoom / oldZoom
+    panelDynamic.updateDynamic("scrollLeft")(
+      math.max(0d, contentX * ratio - pointerX),
+    )
+    panelDynamic.updateDynamic("scrollTop")(
+      math.max(0d, contentY * ratio - pointerY),
+    )
+    syncGridMetrics(panel)
+  }
+
   private def svgNaturalSize(svg: dom.SVGSVGElement): Option[(Double, Double)] = {
     val viewBox = svg.viewBox.baseVal
     if (viewBox != null && viewBox.width > 0 && viewBox.height > 0) {
@@ -419,9 +468,6 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     if (width > 0 && height > 0) Some(width -> height)
     else None
   }
-
-  private def cssPx(value: String): Double =
-    value.stripSuffix("px").toDoubleOption.getOrElse(0d)
 
   def syncGridMetrics(panel: dom.Element): Unit = {
     val settings = gridSettingsVar.now()
