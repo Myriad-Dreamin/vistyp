@@ -37,11 +37,38 @@
 }
 
 .activity-panel-shell {
+    position: relative;
     flex: 0 0 clamp(320px, 36vw, 520px);
     min-width: 280px;
     min-height: 0;
+    overflow: hidden;
     border-right: 1px solid var(--vistyp-color-border);
     background: var(--vistyp-color-panel-sunken);
+}
+
+.activity-panel-page {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
+.activity-panel-page.is-active {
+    visibility: visible;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+.activity-panel-page.is-hidden {
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.activity-panel-page > .source-code-panel,
+.activity-panel-page > .package-panel {
+    width: 100%;
 }
 
 .source-code-panel,

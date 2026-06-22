@@ -15,6 +15,8 @@ trait Vistyp:
   val programContentVar: Var[String]
   val gridSettingsVar: Var[GridSettings]
   val assetLibraryStateSignal: Signal[AssetLibraryState]
+  def previewSvgNow: String
+  def generatedTypstSource: String
 
   def updateDefinition(code: String): Unit
   def updateDiagram(code: String): Unit
@@ -36,6 +38,8 @@ class UI(vistyp: Vistyp):
     BuiltinAssets.resources.headOption.map(_.id).getOrElse(""),
   )
   private val insertNameVar = Var("")
+  private val mainEditorVar = Var(Option.empty[MonacoEditor])
+  private var keyboardShortcutsInstalled = false
 
   val builtinDefinitions = """#let x-circle(rad: 200, inner-text: "") = {
   circle((0, 0), radius: rad, name: node-label)
@@ -65,10 +69,58 @@ class UI(vistyp: Vistyp):
       onMountCallback(_ => {
         updateDefinition(builtinDefinitions)
         loadAssetIndex(defaultLibraryUrl)
+        installKeyboardShortcuts()
       }),
       topPanel(),
       bottomPanel(),
     )
+  }
+
+  private def installKeyboardShortcuts(): Unit = {
+    if keyboardShortcutsInstalled then return
+    keyboardShortcutsInstalled = true
+    dom.window.addEventListener(
+      "keydown",
+      event => handleGlobalKeydown(event.asInstanceOf[dom.KeyboardEvent]),
+    )
+  }
+
+  private def handleGlobalKeydown(evt: dom.KeyboardEvent): Unit = {
+    if isEditableShortcutTarget(evt.target) then return
+
+    val usesModifier = evt.ctrlKey || evt.metaKey
+    if !usesModifier then return
+
+    evt.key.toLowerCase match {
+      case "z" =>
+        evt.preventDefault()
+        runEditorAction(if evt.shiftKey then "redo" else "undo")
+      case "y" =>
+        evt.preventDefault()
+        runEditorAction("redo")
+      case _ =>
+    }
+  }
+
+  private def isEditableShortcutTarget(target: dom.EventTarget | Null): Boolean = {
+    if target == null then return false
+
+    val element = target.asInstanceOf[js.Dynamic]
+    val tagName = element.tagName.asInstanceOf[js.UndefOr[String]]
+      .map(_.toLowerCase)
+      .getOrElse("")
+    val isContentEditable = element.isContentEditable
+      .asInstanceOf[js.UndefOr[Boolean]]
+      .getOrElse(false)
+    val monacoElement =
+      if js.isUndefined(element.closest) then null
+      else element.closest(".monaco-editor")
+
+    tagName == "input" ||
+    tagName == "textarea" ||
+    tagName == "select" ||
+    isContentEditable ||
+    monacoElement != null
   }
 
   def topPanel(): Element = {
@@ -82,27 +134,94 @@ class UI(vistyp: Vistyp):
         ),
         div(
           cls := "editor-menu-group",
-          a(
-            cls := "editor-menu export-svg",
-            "SVG",
+          toolbarButton("Save", "Download the current source", saveSource()),
+          toolbarButton("Load", "Open a local .typ source file", loadSource()),
+        ),
+        div(
+          cls := "editor-menu-group",
+          toolbarButton(
+            "Undo",
+            "Undo the latest source edit",
+            runEditorAction("undo"),
+            enabledSignal = mainEditorVar.signal.map(_.isDefined),
           ),
-          a(
-            cls := "editor-menu export-pdf",
-            "PDF",
+          toolbarButton(
+            "Redo",
+            "Redo the latest undone source edit",
+            runEditorAction("redo"),
+            enabledSignal = mainEditorVar.signal.map(_.isDefined),
           ),
-          a(
-            cls := "editor-menu export-cetz",
+        ),
+        div(
+          cls := "editor-menu-group",
+          toolbarButton("SVG", "Export the current preview as SVG", exportSvg()),
+          toolbarButton(
             "CeTZ",
+            "Export the generated Typst/CeTZ source",
+            exportCetz(),
           ),
-          a(
-            cls := "editor-menu export-elem",
-            "Element",
+          button(
+            cls := "editor-menu editor-menu-disabled",
+            disabled := true,
+            title := "PDF export needs a PDF compile path in the Typst binding",
+            "PDF",
           ),
         ),
         gridControls(),
       ),
     )
   }
+
+  private def toolbarButton(
+      label: String,
+      tooltip: String,
+      action: => Unit,
+      enabledSignal: Signal[Boolean] = Val(true),
+  ): Element =
+    button(
+      cls <-- enabledSignal.map(enabled =>
+        if enabled then "editor-menu" else "editor-menu editor-menu-disabled",
+      ),
+      disabled <-- enabledSignal.map(!_),
+      title := tooltip,
+      label,
+      onClick.mapTo(()) --> { _ =>
+        action
+      },
+    )
+
+  private def saveSource(): Unit =
+    BrowserFiles.downloadText(
+      "vistyp.typ",
+      programContentVar.now(),
+      "text/plain;charset=utf-8",
+    )
+
+  private def loadSource(): Unit =
+    BrowserFiles.openTextFile(".typ,.txt,text/plain") { content =>
+      programContentVar.set(content)
+      if mainEditorVar.now().isEmpty then updateDiagram(content)
+    }
+
+  private def exportSvg(): Unit =
+    BrowserFiles.downloadText(
+      "vistyp.svg",
+      previewSvgNow,
+      "image/svg+xml;charset=utf-8",
+    )
+
+  private def exportCetz(): Unit =
+    BrowserFiles.downloadText(
+      "vistyp-cetz.typ",
+      generatedTypstSource.trim + "\n",
+      "text/plain;charset=utf-8",
+    )
+
+  private def runEditorAction(action: String): Unit =
+    mainEditorVar.now().foreach { editor =>
+      if activeActivityVar.now() == ActivityView.SourceCode then editor.focus()
+      editor.trigger("vistyp.toolbar", action, null.asInstanceOf[js.Any])
+    }
 
   def gridControls(): Element = {
     div(
@@ -141,14 +260,21 @@ class UI(vistyp: Vistyp):
       activityBar(),
       div(
         cls := "activity-panel-shell",
-        child <-- activeActivityVar.signal.map {
-          case ActivityView.SourceCode => sourceCodePanel()
-          case ActivityView.Package    => packagePanel()
-        },
+        activityPanel(ActivityView.SourceCode, sourceCodePanel()),
+        activityPanel(ActivityView.Package, packagePanel()),
       ),
       previewPanel(),
     )
   }
+
+  private def activityPanel(view: ActivityView, content: Element): Element =
+    div(
+      cls <-- activeActivityVar.signal.map(active =>
+        if active == view then "activity-panel-page is-active"
+        else "activity-panel-page is-hidden",
+      ),
+      content,
+    )
 
   def activityBar(): Element = {
     div(
@@ -459,6 +585,7 @@ class UI(vistyp: Vistyp):
     div(
       cls := "main-editor",
       child.maybe <-- monacoLoadSignal.splitOption { (monaco, _) =>
+        var mountedEditor = Option.empty[MonacoEditor]
         div(
           cls := "monaco-editor-host",
           onMountCallback(ctx => {
@@ -473,6 +600,8 @@ class UI(vistyp: Vistyp):
                 "bracketPairColorization.enabled" -> true,
               ),
             )
+            mountedEditor = Some(mainEditor)
+            mainEditorVar.set(Some(mainEditor))
 
             mainEditor
               .getModel()
@@ -484,15 +613,53 @@ class UI(vistyp: Vistyp):
                 }
               })
 
+            var initialized = false
             def syncEditor(content: String): Unit = {
+              if mainEditor.getValue() != content then {
+                if !initialized then
+                  mainEditor.setValue(content)
+                  updateDiagram(content)
+                else
+                  mainEditor.pushUndoStop()
+                  mainEditor.executeEdits(
+                    "vistyp.state",
+                    js.Array(
+                      js.Dynamic
+                        .literal(
+                          range = mainEditor.getModel().getFullModelRange(),
+                          text = content,
+                        )
+                        .asInstanceOf[js.Object],
+                    ),
+                  )
+                  mainEditor.pushUndoStop()
+              }
+
+              if !initialized then
+                initialized = true
+            }
+
+            def syncEditorWithSetValue(content: String): Unit = {
               if mainEditor.getValue() != content then
                 mainEditor.setValue(content)
                 updateDiagram(content)
+              initialized = true
             }
 
             programContentVar.signal.foreach(syncEditor)(using ctx.owner)
-            syncEditor(programContentVar.now())
+            activeActivityVar.signal.foreach { active =>
+              if active == ActivityView.SourceCode then
+                dom.window.setTimeout(() => mainEditor.layout(), 0)
+            }(using ctx.owner)
+            syncEditorWithSetValue(programContentVar.now())
 
+          }),
+          onUnmountCallback(_ => {
+            mountedEditor.foreach { editor =>
+              if mainEditorVar.now().contains(editor) then mainEditorVar.set(None)
+              editor.dispose()
+            }
+            mountedEditor = None
           }),
         )
       },
@@ -544,3 +711,64 @@ class UI(vistyp: Vistyp):
   }
 
 end UI
+
+private object BrowserFiles:
+  def downloadText(filename: String, content: String, mimeType: String): Unit = {
+    val blobOptions = js.Dynamic.literal()
+    blobOptions.updateDynamic("type")(mimeType)
+    val blob = js.Dynamic.newInstance(js.Dynamic.global.Blob)(
+      js.Array(content),
+      blobOptions,
+    )
+    val urlApi = js.Dynamic.global.URL
+    val url = urlApi.createObjectURL(blob).asInstanceOf[String]
+    val anchor = dom.document.createElement("a")
+    val anchorDynamic = anchor.asInstanceOf[js.Dynamic]
+
+    anchorDynamic.href = url
+    anchorDynamic.download = filename
+    anchorDynamic.style.display = "none"
+    dom.document.body.appendChild(anchor)
+    anchorDynamic.click()
+    removeElement(anchor)
+    dom.window.setTimeout(() => urlApi.revokeObjectURL(url), 0)
+  }
+
+  def openTextFile(accept: String)(onLoaded: String => Unit): Unit = {
+    val input = dom.document.createElement("input")
+    val inputDynamic = input.asInstanceOf[js.Dynamic]
+
+    inputDynamic.updateDynamic("type")("file")
+    inputDynamic.accept = accept
+    inputDynamic.style.display = "none"
+    input.addEventListener(
+      "change",
+      (_: dom.Event) => {
+        val files = inputDynamic.files
+        if (
+          files != null &&
+          !js.isUndefined(files.asInstanceOf[js.Any]) &&
+          files.length.asInstanceOf[Int] > 0
+        ) {
+          val file = files.item(0)
+          file
+            .text()
+            .asInstanceOf[js.Promise[String]]
+            .`then`((content: String) => {
+              onLoaded(content)
+            })
+            .`catch`((error: Any) => {
+              dom.console.error("Failed to load source file", error)
+            })
+        }
+
+        removeElement(input)
+      },
+    )
+
+    dom.document.body.appendChild(input)
+    inputDynamic.click()
+  }
+
+  private def removeElement(element: dom.Element): Unit =
+    if element.parentNode != null then element.parentNode.removeChild(element)

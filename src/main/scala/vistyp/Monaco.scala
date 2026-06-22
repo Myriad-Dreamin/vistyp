@@ -16,10 +16,19 @@ trait MonacoEditor extends js.Object {
   def getValue(): String = js.native
   def setValue(value: String): Unit = js.native
   def getModel(): MonacoModel = js.native
+  def trigger(source: String, handlerId: String, payload: js.Any): Unit =
+    js.native
+  def focus(): Unit = js.native
+  def layout(): Unit = js.native
+  def executeEdits(source: String, edits: js.Array[js.Object]): Boolean =
+    js.native
+  def pushUndoStop(): Boolean = js.native
+  def dispose(): Unit = js.native
 }
 
 @js.native
 trait MonacoModel extends js.Object {
+  def getFullModelRange(): js.Object = js.native
   def onDidChangeContent(
       callback: js.Function1[MonacoModelContentChange, Unit],
   ): MonacoModel = js.native

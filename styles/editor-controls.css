@@ -10,6 +10,25 @@
     padding: 1px 3px;
 }
 
+.editor-menu {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--vistyp-color-text);
+    line-height: 1.5;
+}
+
+.editor-menu:hover:not(:disabled) {
+    cursor: pointer;
+    background: var(--vistyp-color-panel-hover);
+}
+
+.editor-menu-disabled {
+    color: var(--vistyp-color-text-subtle);
+    cursor: not-allowed;
+    opacity: 0.62;
+}
+
 .editor-input-box,
 .editor-code-select {
     box-sizing: border-box;
