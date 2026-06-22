@@ -4,3 +4,55 @@
     min-height: 0;
     background: var(--vistyp-preview-bg);
 }
+
+.preview-panel-connect .typst-cetz-elem {
+    cursor: crosshair;
+}
+
+.preview-panel-connect-pending .typst-cetz-elem {
+    cursor: cell;
+}
+
+.typst-cetz-elem.vistyp-connection-start {
+    filter: drop-shadow(0 0 5px var(--vistyp-color-accent));
+    outline: 2px solid var(--vistyp-color-accent);
+    outline-offset: 3px;
+}
+
+.typst-cetz-elem.vistyp-selected-instance {
+    filter: drop-shadow(0 0 4px var(--vistyp-color-accent));
+    outline: 2px solid var(--vistyp-color-accent);
+    outline-offset: 3px;
+}
+
+.vistyp-context-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 146px;
+    padding: 4px;
+    border: 1px solid var(--vistyp-color-border);
+    border-radius: 6px;
+    background: var(--vistyp-color-panel);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.vistyp-context-menu-item {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-height: 28px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 4px;
+    color: var(--vistyp-color-text);
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.vistyp-context-menu-item:hover {
+    color: var(--vistyp-color-text-bright);
+    background: var(--vistyp-color-panel-hover);
+}

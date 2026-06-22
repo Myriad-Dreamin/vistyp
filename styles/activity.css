@@ -67,12 +67,14 @@
 }
 
 .activity-panel-page > .source-code-panel,
-.activity-panel-page > .package-panel {
+.activity-panel-page > .package-panel,
+.activity-panel-page > .properties-panel {
     width: 100%;
 }
 
 .source-code-panel,
-.package-panel {
+.package-panel,
+.properties-panel {
     height: 100%;
     min-height: 0;
 }
