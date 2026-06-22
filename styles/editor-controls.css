@@ -23,6 +23,12 @@
     background: var(--vistyp-color-panel-hover);
 }
 
+.editor-menu-active {
+    color: var(--vistyp-color-text-bright);
+    background: var(--vistyp-color-accent-surface);
+    box-shadow: inset 0 -2px 0 var(--vistyp-color-accent);
+}
+
 .editor-menu-disabled {
     color: var(--vistyp-color-text-subtle);
     cursor: not-allowed;

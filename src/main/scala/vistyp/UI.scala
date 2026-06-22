@@ -8,12 +8,14 @@ import com.raquo.laminar.api.L.{*, given}
 import com.raquo.laminar.DomApi
 
 private enum ActivityView:
-  case SourceCode, Package
+  case SourceCode, Package, Properties
 
 trait Vistyp:
   val previewContentSignal: Signal[(String, Map[String, String])]
   val programContentVar: Var[String]
   val gridSettingsVar: Var[GridSettings]
+  val connectionToolStateSignal: Signal[ConnectionToolState]
+  val selectedInstanceSignal: Signal[Option[SelectedInstanceDetails]]
   val assetLibraryStateSignal: Signal[AssetLibraryState]
   def previewSvgNow: String
   def generatedTypstSource: String
@@ -22,10 +24,18 @@ trait Vistyp:
   def updateDiagram(code: String): Unit
   def loadAssetIndex(url: String): Unit
   def insertResource(resourceId: String, name: String): Unit
+  def toggleConnectionTool(): Unit
+  def clearInstanceSelection(): Unit
+  def updateInstanceName(instanceId: String, newName: String): Unit
+  def updateInstancePosition(instanceId: String, rawX: String, rawY: String): Unit
+  def updateInstanceArg(instanceId: String, argName: String, rawValue: String): Unit
+  def deleteInstance(instanceId: String): Unit
 
   def onPreviewMounted(panel: dom.Element): Unit
   def applyPreviewZoom(panel: dom.Element): Unit
   def syncGridMetrics(panel: dom.Element): Unit
+  def syncConnectionTool(panel: dom.Element): Unit
+  def syncInstanceSelection(panel: dom.Element): Unit
 end Vistyp
 
 class UI(vistyp: Vistyp):
@@ -66,10 +76,14 @@ class UI(vistyp: Vistyp):
   def mainElement(): Element = {
     div(
       cls := "editor-main flex-column",
-      onMountCallback(_ => {
+      onMountCallback(ctx => {
         updateDefinition(builtinDefinitions)
         loadAssetIndex(defaultLibraryUrl)
         installKeyboardShortcuts()
+        selectedInstanceSignal.foreach {
+          case Some(_) => activeActivityVar.set(ActivityView.Properties)
+          case None    =>
+        }(using ctx.owner)
       }),
       topPanel(),
       bottomPanel(),
@@ -154,6 +168,10 @@ class UI(vistyp: Vistyp):
         ),
         div(
           cls := "editor-menu-group",
+          connectionToolButton(),
+        ),
+        div(
+          cls := "editor-menu-group",
           toolbarButton("SVG", "Export the current preview as SVG", exportSvg()),
           toolbarButton(
             "CeTZ",
@@ -171,6 +189,22 @@ class UI(vistyp: Vistyp):
       ),
     )
   }
+
+  private def connectionToolButton(): Element =
+    button(
+      cls <-- connectionToolStateSignal.map(state =>
+        if state.enabled then "editor-menu editor-menu-active" else "editor-menu",
+      ),
+      title <-- connectionToolStateSignal.map { state =>
+        state.startElementId match
+          case Some(start) => s"Connecting from $start"
+          case None        => "Click two preview elements to insert a connection"
+      },
+      "Connect",
+      onClick.mapTo(()) --> { _ =>
+        toggleConnectionTool()
+      },
+    )
 
   private def toolbarButton(
       label: String,
@@ -262,6 +296,7 @@ class UI(vistyp: Vistyp):
         cls := "activity-panel-shell",
         activityPanel(ActivityView.SourceCode, sourceCodePanel()),
         activityPanel(ActivityView.Package, packagePanel()),
+        activityPanel(ActivityView.Properties, propertiesPanel()),
       ),
       previewPanel(),
     )
@@ -281,6 +316,7 @@ class UI(vistyp: Vistyp):
       cls := "activity-bar",
       activityButton(ActivityView.SourceCode, "Source Code"),
       activityButton(ActivityView.Package, "Package"),
+      activityButton(ActivityView.Properties, "Properties"),
     )
   }
 
@@ -336,6 +372,162 @@ class UI(vistyp: Vistyp):
       ),
     )
   }
+
+  def propertiesPanel(): Element = {
+    div(
+      cls := "properties-panel flex-column",
+      div(cls := "activity-panel-title", "Properties"),
+      child <-- selectedInstanceSignal.map {
+        case Some(details) => instanceProperties(details)
+        case None =>
+          div(
+            cls := "properties-empty",
+            "No selection",
+          )
+      },
+    )
+  }
+
+  private def instanceProperties(details: SelectedInstanceDetails): Element = {
+    div(
+      cls := "properties-form",
+      div(
+        cls := "properties-section",
+        div(cls := "properties-section-title", "Instance"),
+        propertyTextInput(
+          "name",
+          details.name,
+          raw => updateInstanceName(details.id, raw),
+        ),
+        propertyReadOnly("type", details.ty),
+        div(
+          cls := "properties-row properties-row-two",
+          label(
+            span(cls := "properties-label", "x"),
+            input(
+              cls := "editor-input-box properties-input",
+              typ := "number",
+              stepAttr := "any",
+              value := details.x,
+              onChange.mapToValue --> { raw =>
+                updateInstancePosition(details.id, raw, details.y)
+              },
+            ),
+          ),
+          label(
+            span(cls := "properties-label", "y"),
+            input(
+              cls := "editor-input-box properties-input",
+              typ := "number",
+              stepAttr := "any",
+              value := details.y,
+              onChange.mapToValue --> { raw =>
+                updateInstancePosition(details.id, details.x, raw)
+              },
+            ),
+          ),
+        ),
+      ),
+      div(
+        cls := "properties-section",
+        div(cls := "properties-section-title", "Arguments"),
+        if details.args.isEmpty then
+          div(cls := "properties-empty properties-empty-inline", "No arguments")
+        else div(details.args.map(arg => propertyArgInput(details, arg))),
+      ),
+      div(
+        cls := "properties-actions",
+        button(
+          cls := "editor-input-button properties-action-button",
+          "Delete",
+          onClick.mapTo(()) --> { _ =>
+            deleteInstance(details.id)
+          },
+        ),
+        button(
+          cls := "editor-input-button properties-action-button",
+          "Deselect",
+          onClick.mapTo(()) --> { _ =>
+            clearInstanceSelection()
+          },
+        ),
+      ),
+    )
+  }
+
+  private def propertyReadOnly(labelText: String, valueText: String): Element =
+    label(
+      cls := "properties-row",
+      span(cls := "properties-label", labelText),
+      input(
+        cls := "editor-input-box properties-input",
+        typ := "text",
+        value := valueText,
+        disabled := true,
+      ),
+    )
+
+  private def propertyTextInput(
+      labelText: String,
+      valueText: String,
+      onCommit: String => Unit,
+  ): Element =
+    label(
+      cls := "properties-row",
+      span(cls := "properties-label", labelText),
+      input(
+        cls := "editor-input-box properties-input",
+        typ := "text",
+        value := valueText,
+        onChange.mapToValue --> onCommit,
+      ),
+    )
+
+  private def propertyArgInput(
+      details: SelectedInstanceDetails,
+      arg: SelectedInstanceArg,
+  ): Element =
+    arg.kind match {
+      case "boolean" if arg.value == "true" || arg.value == "false" =>
+        label(
+          cls := "properties-row properties-row-check",
+          span(cls := "properties-label", arg.name),
+          input(
+            typ := "checkbox",
+            checked := (arg.value == "true"),
+            onChange.mapToChecked --> { checked =>
+              updateInstanceArg(details.id, arg.name, checked.toString)
+            },
+          ),
+        )
+      case "number" =>
+        label(
+          cls := "properties-row",
+          span(cls := "properties-label", arg.name),
+          input(
+            cls := "editor-input-box properties-input",
+            typ := "number",
+            stepAttr := "any",
+            value := arg.value,
+            onChange.mapToValue --> { raw =>
+              updateInstanceArg(details.id, arg.name, raw)
+            },
+          ),
+        )
+      case _ =>
+        label(
+          cls := "properties-row",
+          span(cls := "properties-label", arg.name),
+          input(
+            cls := "editor-input-box properties-input",
+            typ := "text",
+            value := arg.value,
+            onChange.mapToValue --> { raw =>
+              updateInstanceArg(details.id, arg.name, raw)
+            },
+          ),
+        )
+    }
 
   private def packageStatusText(state: AssetLibraryState): String =
     if state.loading then "loading"
@@ -671,10 +863,10 @@ class UI(vistyp: Vistyp):
     div(
       cls := "preview",
       div(
-        cls <-- gridSettingsVar.signal.map(settings =>
-          if Grid.active(settings) then "preview-panel preview-panel-grid"
-          else "preview-panel",
-        ),
+        cls <-- gridSettingsVar.signal.combineWith(connectionToolStateSignal).map {
+          case (settings, connectionState) =>
+            previewPanelClass(settings, connectionState)
+        },
         styleAttr <-- gridSettingsVar.signal.map(settings =>
           s"--vistyp-grid-size: ${Grid.clean(settings.size)}px",
         ),
@@ -705,9 +897,27 @@ class UI(vistyp: Vistyp):
       () => {
         vistyp.applyPreviewZoom(panel)
         vistyp.syncGridMetrics(panel)
+        vistyp.syncConnectionTool(panel)
+        vistyp.syncInstanceSelection(panel)
       },
       0,
     )
+  }
+
+  private def previewPanelClass(
+      settings: GridSettings,
+      connectionState: ConnectionToolState,
+  ): String = {
+    val classes = List(
+      Some("preview-panel"),
+      Option.when(Grid.active(settings))("preview-panel-grid"),
+      Option.when(connectionState.enabled)("preview-panel-connect"),
+      Option.when(connectionState.startElementId.isDefined)(
+        "preview-panel-connect-pending",
+      ),
+    ).flatten
+
+    classes.mkString(" ")
   }
 
 end UI

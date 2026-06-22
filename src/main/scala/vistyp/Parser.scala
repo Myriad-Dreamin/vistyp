@@ -22,10 +22,20 @@ def parseCode(src: String): syntax.MarkupBlock = {
   }
 }
 
+def parseCodeExpression(src: String): Either[String, syntax.Node] = {
+  fastparse.parse(src, Parser.codeExpressionRoot(using _)) match {
+    case Parsed.Success(ast, _) => Right(ast)
+    case failure: Parsed.Failure =>
+      Left(failure.trace().longAggregateMsg)
+  }
+}
+
 object Parser {
   // Entry point
   def markupRoot[$: P]: P[MarkupBlock] =
     P((!End ~ markupExpr).rep.map(_.toList) ~ End).map(MarkupBlock.apply).m
+  def codeExpressionRoot[$: P]: P[Node] =
+    P(codeExpr ~ End)
   def markupMode[$: P]: P[MarkupBlock] =
     P((!End ~ markupExpr).rep.map(_.toList)).map(MarkupBlock.apply).m
   def codeMode[$: P]: P[Block] =

@@ -37,6 +37,14 @@ object VistypImpl extends Vistyp:
   var defMap: Map[String, Def] = Map.empty
   var instances: List[Instance] = List()
   private var previewResizeObserver: Option[dom.ResizeObserver] = None
+  private var previewPanelElement: Option[dom.Element] = None
+  val connectionToolStateVar = Var(ConnectionToolState())
+  val connectionToolStateSignal = connectionToolStateVar.signal
+  private var selectedInstanceId: Option[String] = None
+  val selectedInstanceVar = Var(Option.empty[SelectedInstanceDetails])
+  val selectedInstanceSignal = selectedInstanceVar.signal
+  private var contextMenuElement: Option[dom.Element] = None
+  private var contextMenuDismissInstalled = false
   private val previewZoomLevels =
     Vector(0.1d, 0.25d, 0.5d, 0.75d, 1d, 1.25d, 1.5d, 2d, 3d, 4d)
   private var previewZoomIndex: Int = previewZoomLevels.indexOf(1d)
@@ -75,7 +83,15 @@ object VistypImpl extends Vistyp:
         List()
     }
 
+    val startStillExists =
+      connectionToolStateVar.now().startElementId.forall(start =>
+        newInstances.exists(_.name == start),
+      )
+    if !startStillExists then
+      connectionToolStateVar.update(_.copy(startElementId = None))
+
     instances = newInstances
+    refreshSelectedInstance()
     updatePreview()
   }
 
@@ -150,8 +166,13 @@ let x-rect(x: 200, y: none, inner-text: "", node-label: "") = {
 }
 let x-arrow(start: (0, 10), end: (50, 10), inner-text: "", mark: (end: ">"), node-label: "") = {
   set-style(mark: (fill: none, size: 14))
-  line(start, end, name: "t", mark: mark)
-  content("t.centroid", inner-text)
+  let edge-name = if node-label == "" {
+    "t"
+  } else {
+    node-label
+  }
+  line(start, end, name: edge-name, mark: mark)
+  content(edge-name + ".centroid", inner-text)
 }
     """
   }
@@ -337,6 +358,119 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     updateDiagram(content)
   }
 
+  def clearInstanceSelection(): Unit = {
+    selectedInstanceId = None
+    selectedInstanceVar.set(None)
+    previewPanelElement.foreach(syncInstanceSelection)
+    hideContextMenu()
+  }
+
+  def updateInstanceName(instanceId: String, newName: String): Unit = {
+    val trimmed = newName.trim
+    if trimmed.isEmpty then
+      setPropertyError("Instance name cannot be empty")
+      return
+    if trimmed != instanceId && instances.exists(_.name == trimmed) then
+      setPropertyError(s"Instance name already exists: $trimmed")
+      return
+
+    instances = instances.map { ins =>
+      val renamed =
+        if ins.name == instanceId then ins.copy(name = trimmed)
+        else ins
+      if trimmed == instanceId then renamed
+      else renamed.copy(extraArgs = updateReferenceArgs(renamed.extraArgs, instanceId, trimmed))
+    }
+    selectedInstanceId = Some(trimmed)
+    commitInstances(trimmed)
+  }
+
+  def updateInstancePosition(
+      instanceId: String,
+      rawX: String,
+      rawY: String,
+  ): Unit = {
+    val nextPos = for {
+      x <- rawX.trim.toDoubleOption
+      y <- rawY.trim.toDoubleOption
+    } yield Grid.clean(x) -> Grid.clean(y)
+
+    nextPos match {
+      case Some(pos) =>
+        instances = instances.map { ins =>
+          if ins.name == instanceId then ins.copy(pos = Some(pos), initPos = None)
+          else ins
+        }
+        commitInstances(instanceId)
+      case None =>
+        setPropertyError(s"Invalid position: ($rawX, $rawY)")
+    }
+  }
+
+  def updateInstanceArg(
+      instanceId: String,
+      argName: String,
+      rawValue: String,
+  ): Unit = {
+    val instance = instances.find(_.name == instanceId) match {
+      case Some(instance) => instance
+      case None =>
+        clearInstanceSelection()
+        return
+    }
+    val kind = resourceArg(instance, argName).map(_.kind).getOrElse("code")
+    val parsedValue = parsePropertyValue(rawValue, kind)
+
+    parsedValue match {
+      case Right(value) =>
+        instances = instances.map { ins =>
+          if ins.name == instanceId then
+            ins.copy(extraArgs = Some(upsertArg(ins.extraArgs.toList.flatten, argName, value)))
+          else ins
+        }
+        commitInstances(instanceId)
+      case Left(error) =>
+        setPropertyError(s"Invalid $argName: $error")
+    }
+  }
+
+  def deleteInstance(instanceId: String): Unit = {
+    instances = instances.filterNot(_.name == instanceId)
+    if selectedInstanceId.contains(instanceId) then selectedInstanceId = None
+    selectedInstanceVar.set(None)
+    hideContextMenu()
+    updateProgram()
+    updatePreview()
+    previewPanelElement.foreach(syncInstanceSelection)
+  }
+
+  def toggleConnectionTool(): Unit =
+    setConnectionToolEnabled(!connectionToolStateVar.now().enabled)
+
+  private def setConnectionToolEnabled(enabled: Boolean): Unit = {
+    connectionToolStateVar.set(ConnectionToolState(enabled = enabled))
+    previewPanelElement.foreach(syncConnectionTool)
+  }
+
+  private def insertConnection(startId: String, endId: String): Unit = {
+    val start = instances.find(_.name == startId)
+    val end = instances.find(_.name == endId)
+    (start, end) match {
+      case (Some(startIns), Some(endIns)) =>
+        val resource = chooseConnectionResource(startIns, endIns)
+        val (startAnchor, endAnchor) = connectionAnchors(startIns, endIns)
+        val name = uniqueConnectionName(startId, endId)
+        val item =
+          s"""make-ins("${escapeStr(name)}", (0, 0), "${escapeStr(resource.id)}", (start: "${escapeStr(startAnchor)}", end: "${escapeStr(endAnchor)}"))"""
+        val content = appendMakeIns(programContentVar.now(), item)
+        programContentVar.set(content)
+        updateDiagram(content)
+
+      case _ =>
+        connectionToolStateVar.update(_.copy(startElementId = None))
+    }
+  }
+
   def updateProgram() = {
     var content = instances
       .map { ins =>
@@ -357,10 +491,282 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     else s"#{\n  $item\n}"
   }
 
+  private def commitInstances(selectionId: String): Unit = {
+    selectedInstanceId = Some(selectionId)
+    updateProgram()
+    refreshSelectedInstance()
+    updatePreview()
+    previewPanelElement.foreach(syncInstanceSelection)
+  }
+
+  private def refreshSelectedInstance(): Unit =
+    selectedInstanceId match {
+      case Some(instanceId) =>
+        instances.find(_.name == instanceId) match {
+          case Some(instance) =>
+            selectedInstanceVar.set(Some(instanceDetails(instance)))
+          case None =>
+            selectedInstanceId = None
+            selectedInstanceVar.set(None)
+        }
+      case None =>
+        selectedInstanceVar.set(None)
+    }
+
+  private def instanceDetails(instance: Instance): SelectedInstanceDetails = {
+    val pos = instance.pos.getOrElse(0d -> 0d)
+    SelectedInstanceDetails(
+      id = instance.name,
+      name = instance.name,
+      ty = instance.ty,
+      x = Grid.clean(pos._1).toString,
+      y = Grid.clean(pos._2).toString,
+      args = instanceArgDetails(instance),
+      isConnection = isConnectionInstance(instance),
+    )
+  }
+
+  private def instanceArgDetails(instance: Instance): List[SelectedInstanceArg] = {
+    val keyedArgs = instance.extraArgs.toList.flatten.collect {
+      case arg @ KeyedArg(Ident(argName), value) => argName -> (arg, value)
+    }
+    val keyedByName = keyedArgs.toMap
+    val resourceArgs = resourceForInstance(instance).map(_.args).getOrElse(Nil)
+    val orderedNames =
+      (resourceArgs.map(_.name) ++ keyedArgs.map(_._1)).distinct
+
+    orderedNames.map { argName =>
+      val resourceArgOpt = resourceArgs.find(_.name == argName)
+      val valueOpt = keyedByName.get(argName).map(_._2)
+      val fallbackValue =
+        resourceArgOpt
+          .flatMap(arg => parseCodeExpression(arg.defaultValue).toOption)
+      val kind = resourceArgOpt
+        .map(_.kind)
+        .orElse(valueOpt.map(valueKind))
+        .getOrElse("code")
+      val value = valueOpt
+        .orElse(fallbackValue)
+        .map(displayPropertyValue(_, kind))
+        .getOrElse("")
+
+      SelectedInstanceArg(
+        name = argName,
+        kind = kind,
+        value = value,
+        present = valueOpt.isDefined,
+      )
+    }
+  }
+
+  private def resourceForInstance(instance: Instance): Option[AssetResource] =
+    allAssetResources.find(_.id == instance.ty)
+
+  private def resourceArg(instance: Instance, argName: String): Option[AssetArg] =
+    resourceForInstance(instance).flatMap(_.args.find(_.name == argName))
+
+  private def displayPropertyValue(value: syntax.Node, kind: String): String =
+    value match {
+      case StrLit(text) if kind == "text" => text
+      case _                              => value.repr
+    }
+
+  private def valueKind(value: syntax.Node): String =
+    value match {
+      case StrLit(_)              => "text"
+      case BoolLit(_)             => "boolean"
+      case IntLit(_) | FloatLit(_) => "number"
+      case _                      => "code"
+    }
+
+  private def parsePropertyValue(
+      rawValue: String,
+      kind: String,
+  ): Either[String, syntax.Node] =
+    if kind == "text" then Right(StrLit(rawValue))
+    else
+      val trimmed = rawValue.trim
+      if trimmed.isEmpty then Left("value is empty")
+      else parseCodeExpression(trimmed)
+
+  private def upsertArg(
+      args: List[syntax.Node],
+      argName: String,
+      value: syntax.Node,
+  ): List[syntax.Node] = {
+    val next = KeyedArg(Ident(argName), value)
+    var replaced = false
+    val updated = args.map {
+      case KeyedArg(Ident(name), _) if name == argName =>
+        replaced = true
+        next
+      case other => other
+    }
+    if replaced then updated else updated :+ next
+  }
+
+  private def updateReferenceArgs(
+      extraArgs: Option[List[syntax.Node]],
+      oldName: String,
+      newName: String,
+  ): Option[List[syntax.Node]] =
+    extraArgs.map(_.map {
+      case KeyedArg(Ident(argName), StrLit(value))
+          if argName == "start" || argName == "end" =>
+        KeyedArg(Ident(argName), StrLit(rewriteAnchorReference(value, oldName, newName)))
+      case other => other
+    })
+
+  private def rewriteAnchorReference(
+      value: String,
+      oldName: String,
+      newName: String,
+  ): String =
+    if value == oldName then newName
+    else if value.startsWith(oldName + ".") then newName + value.drop(oldName.length)
+    else value
+
+  private def setPropertyError(message: String): Unit =
+    assetLibraryStateVar.update(_.copy(error = Some(message)))
+
+  private def chooseConnectionResource(
+      start: Instance,
+      end: Instance,
+  ): AssetResource = {
+    val candidates = allAssetResources.filter(isConnectionResource)
+    val endpointKeys = List(start.ty, end.ty)
+      .flatMap(ResourceRef.parse)
+      .map(_.packageKey)
+      .distinct
+    val diagramKeys = instances
+      .flatMap(ins => ResourceRef.parse(ins.ty).map(_.packageKey))
+      .distinct
+
+    bestConnectionResource(
+      candidates.filter(resource =>
+        resource.packageKey.exists(endpointKeys.contains),
+      ),
+      start,
+      end,
+    ).orElse(
+      bestConnectionResource(
+        candidates.filter(resource =>
+          resource.packageKey.exists(diagramKeys.contains),
+        ),
+        start,
+        end,
+      ),
+    ).orElse(candidates.find(_.id == "x-arrow"))
+      .orElse(BuiltinAssets.resources.find(_.id == "x-arrow"))
+      .get
+  }
+
+  private def bestConnectionResource(
+      candidates: List[AssetResource],
+      start: Instance,
+      end: Instance,
+  ): Option[AssetResource] = {
+    val bothConnectionLike = isConnectionInstance(start) && isConnectionInstance(end)
+    val byName = candidates.sortBy(resource =>
+      connectionResourceRank(resource, bothConnectionLike),
+    )
+    byName.headOption
+  }
+
+  private def connectionResourceRank(
+      resource: AssetResource,
+      bothConnectionLike: Boolean,
+  ): Int = {
+    val name = resource.functionName.toLowerCase
+    if bothConnectionLike && name.contains("2cell") then 0
+    else if bothConnectionLike && name.contains("cell") then 1
+    else if name.contains("arrow") then 2
+    else if name.contains("edge") then 3
+    else 4
+  }
+
+  private def isConnectionResource(resource: AssetResource): Boolean = {
+    val argNames = resource.args.map(_.name).toSet
+    argNames.contains("start") && argNames.contains("end")
+  }
+
+  private def connectionAnchors(
+      start: Instance,
+      end: Instance,
+  ): (String, String) = {
+    if isConnectionInstance(start) && isConnectionInstance(end) then
+      return s"${start.name}.centroid" -> s"${end.name}.centroid"
+
+    val (startSide, endSide) = connectionSides(start, end)
+    connectionAnchor(start, startSide) -> connectionAnchor(end, endSide)
+  }
+
+  private def connectionAnchor(ins: Instance, side: String): String =
+    if isConnectionInstance(ins) then s"${ins.name}.centroid"
+    else s"${ins.name}.$side"
+
+  private def connectionSides(start: Instance, end: Instance): (String, String) = {
+    val startPos = start.pos.getOrElse(0d -> 0d)
+    val endPos = end.pos.getOrElse(0d -> 0d)
+    val dx = endPos._1 - startPos._1
+    val dy = endPos._2 - startPos._2
+    val absX = math.abs(dx)
+    val absY = math.abs(dy)
+
+    if absX == 0 && absY == 0 then "east" -> "west"
+    else if absX > absY * 1.25 then
+      if dx >= 0 then "east" -> "west" else "west" -> "east"
+    else if absY > absX * 1.25 then
+      if dy >= 0 then "north" -> "south" else "south" -> "north"
+    else if dx >= 0 && dy >= 0 then "north-east" -> "south-west"
+    else if dx >= 0 then "south-east" -> "north-west"
+    else if dy >= 0 then "north-west" -> "south-east"
+    else "south-west" -> "north-east"
+  }
+
+  private def isConnectionInstance(ins: Instance): Boolean = {
+    val argNames = keyedArgNames(ins)
+    val functionName = ResourceRef.parse(ins.ty).map(_.functionName).getOrElse(ins.ty)
+    (argNames.contains("start") && argNames.contains("end")) ||
+    functionName.toLowerCase.contains("arrow")
+  }
+
+  private def keyedArgNames(ins: Instance): Set[String] =
+    ins.extraArgs.toList.flatten.collect {
+      case KeyedArg(Ident(argName), _) => argName
+    }.toSet
+
+  private def uniqueConnectionName(startId: String, endId: String): String = {
+    val base = sanitizeConnectionName(s"a-$startId-$endId")
+    val used = instances.map(_.name).toSet
+    if !used.contains(base) then base
+    else
+      LazyList
+        .from(2)
+        .map(idx => s"$base-$idx")
+        .find(name => !used.contains(name))
+        .get
+  }
+
+  private def sanitizeConnectionName(raw: String): String = {
+    val normalized = raw
+      .map(ch =>
+        if ch.isLetterOrDigit || ch == '-' || ch == '_' then ch
+        else '-',
+      )
+      .mkString
+      .replaceAll("-+", "-")
+      .stripPrefix("-")
+      .stripSuffix("-")
+
+    if normalized.nonEmpty then normalized else "edge"
+  }
+
   private def errorMessage(error: Any): String =
     Option(error).fold("Unknown asset library error")(_.toString)
 
   def onPreviewMounted(panel: dom.Element): Unit = {
+    previewPanelElement = Some(panel)
     previewResizeObserver.foreach(_.disconnect())
     val observer = new dom.ResizeObserver((_, _) => schedulePreviewLayoutSync(panel))
     observer.observe(panel)
@@ -388,16 +794,118 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       "wheel",
       e => this.zoomPreview(panel, e.asInstanceOf[dom.WheelEvent]),
     );
-    // panel.addEventListener(
-    //   "contextmenu",
-    //   e => this.doToggleContextMenu(panel, e),
-    // );
+    panel.addEventListener(
+      "contextmenu",
+      e => this.showInstanceContextMenu(panel, e.asInstanceOf[dom.MouseEvent]),
+    );
+    if !contextMenuDismissInstalled then
+      contextMenuDismissInstalled = true
+      dom.document.addEventListener(
+        "mousedown",
+        e => {
+          val target = e.target.asInstanceOf[dom.Element | Null]
+          val insideMenu = contextMenuElement.exists(menu =>
+            target != null && menu.contains(target),
+          )
+          if !insideMenu then hideContextMenu()
+        },
+      )
+  }
+
+  def syncConnectionTool(panel: dom.Element): Unit = {
+    clearConnectionStartClasses(panel)
+    connectionToolStateVar.now().startElementId.foreach { startId =>
+      findTaggedTypstElementById(panel, startId).foreach(
+        _.classList.add("vistyp-connection-start"),
+      )
+    }
+  }
+
+  def syncInstanceSelection(panel: dom.Element): Unit = {
+    clearSelectedInstanceClasses(panel)
+    selectedInstanceId.foreach { instanceId =>
+      findTaggedTypstElementById(panel, instanceId).foreach(
+        _.classList.add("vistyp-selected-instance"),
+      )
+    }
+  }
+
+  private def selectInstance(instanceId: String): Unit = {
+    if instances.exists(_.name == instanceId) then
+      selectedInstanceId = Some(instanceId)
+      refreshSelectedInstance()
+      previewPanelElement.foreach(syncInstanceSelection)
+  }
+
+  private def showInstanceContextMenu(
+      panel: dom.Element,
+      evt: dom.MouseEvent,
+  ): Unit = {
+    val targetOpt =
+      findTaggedTypstElement(evt.target.asInstanceOf[dom.Element])
+    targetOpt match {
+      case Some(target) =>
+        evt.preventDefault()
+        evt.stopPropagation()
+        val instanceId = getTypstElementId(target)
+        selectInstance(instanceId)
+        showContextMenuForInstance(instanceId, evt.clientX, evt.clientY)
+      case None =>
+        hideContextMenu()
+    }
+  }
+
+  private def showContextMenuForInstance(
+      instanceId: String,
+      clientX: Double,
+      clientY: Double,
+  ): Unit = {
+    hideContextMenu()
+    val menu = dom.document.createElement("div")
+    menu.setAttribute("class", "vistyp-context-menu")
+    menu.asInstanceOf[js.Dynamic].style.left = s"${clientX}px"
+    menu.asInstanceOf[js.Dynamic].style.top = s"${clientY}px"
+
+    menu.appendChild(contextMenuButton("Edit properties") { () =>
+      selectInstance(instanceId)
+      hideContextMenu()
+    })
+    menu.appendChild(contextMenuButton("Delete") { () =>
+      deleteInstance(instanceId)
+    })
+
+    dom.document.body.appendChild(menu)
+    contextMenuElement = Some(menu)
+  }
+
+  private def contextMenuButton(label: String)(action: () => Unit): dom.Element = {
+    val button = dom.document.createElement("button")
+    button.setAttribute("class", "vistyp-context-menu-item")
+    button.textContent = label
+    button.addEventListener(
+      "click",
+      (event: dom.Event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        action()
+      },
+    )
+    button
+  }
+
+  private def hideContextMenu(): Unit = {
+    contextMenuElement.foreach { menu =>
+      if menu.parentNode != null then menu.parentNode.removeChild(menu)
+    }
+    contextMenuElement = None
   }
 
   private def schedulePreviewLayoutSync(panel: dom.Element): Unit = {
     dom.window.requestAnimationFrame { _ =>
       applyPreviewZoom(panel)
       syncGridMetrics(panel)
+      syncConnectionTool(panel)
+      syncInstanceSelection(panel)
     }
   }
 
@@ -609,7 +1117,52 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   var svgElem: Option[dom.SVGElement] = None
   var transform = Option.empty[dom.SVGTransform]
   var dragStartPos: Option[(Double, Double)] = None
+
+  private def handleConnectionMouseDown(
+      panel: dom.Element,
+      evt: dom.MouseEvent,
+  ): Unit = {
+    evt.preventDefault()
+    evt.stopPropagation()
+    selectedElem = None
+    dragStartPos = None
+
+    val targetOpt =
+      findTaggedTypstElement(evt.target.asInstanceOf[dom.Element])
+    targetOpt match {
+      case Some(target) =>
+        val typstId = getTypstElementId(target)
+        if !instances.exists(_.name == typstId) then return
+
+        connectionToolStateVar.now().startElementId match {
+          case Some(startId) if startId == typstId =>
+            connectionToolStateVar.update(_.copy(startElementId = None))
+            syncConnectionTool(panel)
+
+          case Some(startId) =>
+            connectionToolStateVar.update(_.copy(startElementId = None))
+            insertConnection(startId, typstId)
+            syncConnectionTool(panel)
+
+          case None =>
+            connectionToolStateVar.update(_.copy(startElementId = Some(typstId)))
+            syncConnectionTool(panel)
+        }
+
+      case None =>
+        connectionToolStateVar.update(_.copy(startElementId = None))
+        syncConnectionTool(panel)
+    }
+  }
+
   def startDrag(panel: dom.Element, evt: dom.MouseEvent): Unit = {
+    if evt.button != 0 then return
+    hideContextMenu()
+
+    if connectionToolStateVar.now().enabled then {
+      handleConnectionMouseDown(panel, evt)
+      return
+    }
 
     val targetOpt =
       findTaggedTypstElement(evt.target.asInstanceOf[dom.Element]);
@@ -618,6 +1171,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       case Some(target) => target
       case None =>
         selectedElem = None
+        clearInstanceSelection()
         return
     }
     svgElem = findSvgElement(panel)
@@ -653,6 +1207,7 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
       (offset._1 - transform.get.matrix.e) -> (offset._2 - transform.get.matrix.f)
 
     val typstId = getTypstElementId(target)
+    selectInstance(typstId)
     println(s"find typstId $typstId in $instances")
     dragStartPos =
       instances.find(_.name == typstId).flatMap(_.pos).orElse(Some(0d -> 0d))
@@ -774,6 +1329,42 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
     Some(panel.querySelector("svg").asInstanceOf[dom.SVGElement])
   }
 
+  private def clearConnectionStartClasses(panel: dom.Element): Unit = {
+    val elements = panel.querySelectorAll(".vistyp-connection-start")
+    var idx = 0
+    while idx < elements.length do
+      elements(idx)
+        .asInstanceOf[dom.Element]
+        .classList
+        .remove("vistyp-connection-start")
+      idx += 1
+  }
+
+  private def clearSelectedInstanceClasses(panel: dom.Element): Unit = {
+    val elements = panel.querySelectorAll(".vistyp-selected-instance")
+    var idx = 0
+    while idx < elements.length do
+      elements(idx)
+        .asInstanceOf[dom.Element]
+        .classList
+        .remove("vistyp-selected-instance")
+      idx += 1
+  }
+
+  private def findTaggedTypstElementById(
+      panel: dom.Element,
+      typstId: String,
+  ): Option[dom.Element] = {
+    val elements = panel.querySelectorAll(".typst-cetz-elem")
+    var idx = 0
+    while idx < elements.length do
+      val element = elements(idx).asInstanceOf[dom.Element]
+      if getTypstElementId(element) == typstId then return Some(element)
+      idx += 1
+
+    None
+  }
+
   def findTaggedTypstElement(target: dom.Element): Option[dom.Element] = {
     var current = target
     while (current != null) {
@@ -806,4 +1397,26 @@ case class Instance(
     val ty: String,
     val extraArgs: Option[List[syntax.Node]],
     val initPos: Option[(Double, Double)] = None,
+)
+
+case class ConnectionToolState(
+    enabled: Boolean = false,
+    startElementId: Option[String] = None,
+)
+
+case class SelectedInstanceDetails(
+    id: String,
+    name: String,
+    ty: String,
+    x: String,
+    y: String,
+    args: List[SelectedInstanceArg],
+    isConnection: Boolean,
+)
+
+case class SelectedInstanceArg(
+    name: String,
+    kind: String,
+    value: String,
+    present: Boolean,
 )
