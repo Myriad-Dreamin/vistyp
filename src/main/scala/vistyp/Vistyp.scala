@@ -220,26 +220,9 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
 
     // val state = PreviewState(defMap, instances)
 
-    val (packageImports, packageAliases) = genPackageImports()
     val packageSources = loadedAssetPackages.flatMap(_.files).toMap
 
-    val content = s"""
-    #import "@preview/cetz:0.5.2"
-    // #place(dx: 0pt, dy: 0pt, circle())
-    // #place(dx: 50pt, dy: 50pt, square())
-    // #place(dx: 200pt, dy: 0pt, circle())
-    // #place(dx: 50pt, dy: 50pt, square())
-    
-    #set page(width: auto, height: auto, margin: 12pt)
-    #let debug-label(_) = ()
-    #cetz.canvas({
-      import cetz.draw: *
-      let node-label = ""
-      ${genSignatures()}
-      $packageImports
-      ${genInstances(packageAliases)}
-    }, length: 1pt)
-    """
+    val content = generatedTypstSource
     // println(s"preview main $content")
     Typst
       .previewSvg(content, packageSources)
@@ -270,6 +253,30 @@ rect((0, 0), (1, 1), stroke: 0.00012345pt + rgb("#$hex"))
   val gridSettingsVar = Var(GridSettings())
   val assetLibraryStateVar = Var(AssetLibraryState())
   val assetLibraryStateSignal = assetLibraryStateVar.signal
+
+  def previewSvgNow: String = previewContentVar.now()._1
+
+  def generatedTypstSource: String = {
+    val (packageImports, packageAliases) = genPackageImports()
+
+    s"""
+    #import "@preview/cetz:0.5.2"
+    // #place(dx: 0pt, dy: 0pt, circle())
+    // #place(dx: 50pt, dy: 50pt, square())
+    // #place(dx: 200pt, dy: 0pt, circle())
+    // #place(dx: 50pt, dy: 50pt, square())
+
+    #set page(width: auto, height: auto, margin: 12pt)
+    #let debug-label(_) = ()
+    #cetz.canvas({
+      import cetz.draw: *
+      let node-label = ""
+      ${genSignatures()}
+      $packageImports
+      ${genInstances(packageAliases)}
+    }, length: 1pt)
+    """
+  }
 
   private def loadedAssetPackages: List[LoadedAssetPackage] =
     assetLibraryStateVar.now().packages
