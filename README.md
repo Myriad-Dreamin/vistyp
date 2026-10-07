@@ -37,9 +37,9 @@ There are three ways to run the sample project (Also see the [`src/index.mts`](.
 
 1. Use the wasm modules from CDN (default):
 
-- ensure that the `projects/cetz-editor` is cloned individually (not in the source tree of `typst.ts`)
+- ensure that the `projects/vistyp` is cloned individually (not in the source tree of `typst.ts`)
   ```bash
-  git clone https://github.com/Myriad-Dreamin/cetz-editor.git
+  git clone https://github.com/Myriad-Dreamin/vistyp.git
   ```
 - ensure that you can connect to jsdelivr.net
 - change `window.$typst$moduleSource` manually in the [`src/index.mts`](./src/index.mts) file:
@@ -111,4 +111,4 @@ $ cargo run --bin typst-ts-dev-server -- run http --corpus ./fuzzers/corpora/
 
 This is a quick and dirty project, so you may face some problems when you try to run it. Please feel free to open an [issue](https://github.com/Myriad-Dreamin/typst.ts/issues) or a [discussion](https://github.com/Myriad-Dreamin/typst.ts/discussions) if you have any questions.
 
-Also feel free to open a [issue](https://github.com/Myriad-Dreamin/cetz-editor/pulls) to help us improve this sample project.
+Also feel free to open a [issue](https://github.com/Myriad-Dreamin/vistyp/pulls) to help us improve this sample project.
